@@ -1,0 +1,19 @@
+[package]
+authors = ["Michael Leonhard <michael@leonhardllc.com>"]
+categories = ["network-programming"]
+description = "Derive macro for the `jtoo` crate"
+edition = "2021"
+keywords = ["jtoo", "htoo", "json"]
+license = "MIT OR Apache-2.0"
+name = "jtoo_derive"
+repository = "https://github.com/mleonhard/jtoo-rs"
+version = "0.1.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+safe-proc-macro2 = { version = "1.0.67", features = ["proc-macro"] }
+safe-quote = { version = "1.0.15", features = ["proc-macro"] }
+# ["clone-impls", "derive", "parsing", "printing"]
+syn = { version = "2.0.71", features = ["proc-macro"] }

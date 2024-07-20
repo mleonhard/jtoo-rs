@@ -1,12 +1,6 @@
-[package]
-authors = ["Michael Leonhard <michael@leonhardllc.com>"]
-categories = ["network-programming"]
-description = "Rust library for serializing and deserializing the JTOO data format"
-edition = "2021"
-keywords = ["jtoo", "htoo", "json"]
-license = "MIT OR Apache-2.0"
-name = "jtoo"
-repository = "https://github.com/mleonhard/jtoo-rs"
-version = "0.1.0"
-
-[dependencies]
+[workspace]
+resolver = "2"
+members = [
+    "jtoo",
+    "jtoo_derive",
+]
