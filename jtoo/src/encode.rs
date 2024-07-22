@@ -10,6 +10,7 @@ pub enum EncodeError {
     UnclosedList,
     UnclosedString,
     InvalidDecimal,
+    InvalidTimestamp,
 }
 
 pub trait Encode {
@@ -231,6 +232,34 @@ impl Encoder {
     }
 
     // TODO: Implement times.
+
+    pub fn append_timestamp_seconds(&mut self, s: u64) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.string.push('S');
+        let value = i64::try_from(s).map_err(|_| EncodeError::InvalidTimestamp)?;
+        self.append_integer(value)
+    }
+
+    pub fn append_timestamp_milliseconds(&mut self, ms: u64) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.string.push('S');
+        let value = i64::try_from(ms).map_err(|_| EncodeError::InvalidTimestamp)?;
+        self.append_decimal(value, -3)
+    }
+
+    pub fn append_timestamp_microseconds(&mut self, us: u64) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.string.push('S');
+        let value = i64::try_from(us).map_err(|_| EncodeError::InvalidTimestamp)?;
+        self.append_decimal(value, -6)
+    }
+
+    pub fn append_timestamp_nanosecond(&mut self, ns: u64) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.string.push('S');
+        let value = i64::try_from(ns).map_err(|_| EncodeError::InvalidTimestamp)?;
+        self.append_decimal(value, -9)
+    }
 
     pub fn to_string(mut self) -> Result<String, EncodeError> {
         match self.stack.pop() {

@@ -126,6 +126,8 @@ fn decimal() {
         (i64::MAX, 0, "9_223_372_036_854_775_807.0"),
         (i64::MIN, 0, "-9_223_372_036_854_775_808.0"),
         // Zeros added after the decimal point.
+        (0, -2, "0.0"),
+        (0, -1, "0.0"),
         (1, -2, "0.01"),
         (-1, -2, "-0.01"),
         (1, -3, "0.001"),
@@ -149,10 +151,12 @@ fn decimal() {
         (i64::MAX, -19, "0.922_337_203_685_477_580_7"),
         (i64::MIN, -19, "-0.922_337_203_685_477_580_8"),
         // Digits on both sides of decimal point.
+        (10, -1, "1.0"),
         (12, -1, "1.2"),
         (123, -1, "12.3"),
         (1234, -1, "123.4"),
         (12345, -1, "1_234.5"),
+        (10, -2, "0.10"),
         (123456, -2, "1_234.56"),
         (1234567, -3, "1_234.567"),
         (12345678, -4, "1_234.567_8"),
@@ -310,4 +314,120 @@ fn string_unclosed() {
     encoder.open_string().unwrap();
     assert_eq!(encoder.append_bool(true), Err(EncodeError::UnclosedString));
     assert_eq!(encoder.to_string(), Err(EncodeError::UnclosedString));
+}
+
+#[test]
+fn timestamp_seconds() {
+    for (value, expected) in [
+        (0, Ok("S0")),
+        (1, Ok("S1")),
+        (10, Ok("S10")),
+        (100, Ok("S100")),
+        (1000, Ok("S1_000")),
+        (10000, Ok("S10_000")),
+        (100000, Ok("S100_000")),
+        (1000000, Ok("S1_000_000")),
+        (1234567890, Ok("S1_234_567_890")),
+        (i64::MAX as u64, Ok("S9_223_372_036_854_775_807")),
+        (i64::MAX as u64 + 1, Err(EncodeError::InvalidTimestamp)),
+        (u64::MAX, Err(EncodeError::InvalidTimestamp)),
+    ] {
+        let mut encoder = Encoder::new();
+        match expected {
+            Ok(s) => {
+                encoder.append_timestamp_seconds(value).unwrap();
+                assert_eq!(encoder.to_string(), Ok(s.to_string()));
+            }
+            Err(e) => {
+                assert_eq!(encoder.append_timestamp_seconds(value), Err(e));
+            }
+        }
+    }
+}
+
+#[test]
+fn timestamp_milliseconds() {
+    for (value, expected) in [
+        (0, Ok("S0.0")),
+        (1, Ok("S0.001")),
+        (10, Ok("S0.010")),
+        (100, Ok("S0.100")),
+        (1000, Ok("S1.000")),
+        (10000, Ok("S10.000")),
+        (100000, Ok("S100.000")),
+        (1000000, Ok("S1_000.000")),
+        (1234567890, Ok("S1_234_567.890")),
+        (i64::MAX as u64, Ok("S9_223_372_036_854_775.807")),
+        (i64::MAX as u64 + 1, Err(EncodeError::InvalidTimestamp)),
+        (u64::MAX, Err(EncodeError::InvalidTimestamp)),
+    ] {
+        let mut encoder = Encoder::new();
+        match expected {
+            Ok(s) => {
+                encoder.append_timestamp_milliseconds(value).unwrap();
+                assert_eq!(encoder.to_string(), Ok(s.to_string()));
+            }
+            Err(e) => {
+                assert_eq!(encoder.append_timestamp_milliseconds(value), Err(e));
+            }
+        }
+    }
+}
+
+#[test]
+fn timestamp_microseconds() {
+    for (value, expected) in [
+        (0, Ok("S0.0")),
+        (1, Ok("S0.000_001")),
+        (10, Ok("S0.000_010")),
+        (100, Ok("S0.000_100")),
+        (1000, Ok("S0.001_000")),
+        (10000, Ok("S0.010_000")),
+        (100000, Ok("S0.100_000")),
+        (1000000, Ok("S1.000_000")),
+        (1234567890, Ok("S1_234.567_890")),
+        (i64::MAX as u64, Ok("S9_223_372_036_854.775_807")),
+        (i64::MAX as u64 + 1, Err(EncodeError::InvalidTimestamp)),
+        (u64::MAX, Err(EncodeError::InvalidTimestamp)),
+    ] {
+        let mut encoder = Encoder::new();
+        match expected {
+            Ok(s) => {
+                encoder.append_timestamp_microseconds(value).unwrap();
+                assert_eq!(encoder.to_string(), Ok(s.to_string()));
+            }
+            Err(e) => {
+                assert_eq!(encoder.append_timestamp_microseconds(value), Err(e));
+            }
+        }
+    }
+}
+
+#[test]
+fn timestamp_nanoseconds() {
+    for (value, expected) in [
+        (0, Ok("S0.0")),
+        (1, Ok("S0.000_000_001")),
+        (10, Ok("S0.000_000_010")),
+        (100, Ok("S0.000_000_100")),
+        (1000, Ok("S0.000_001_000")),
+        (10000, Ok("S0.000_010_000")),
+        (100000, Ok("S0.000_100_000")),
+        (1000000, Ok("S0.001_000_000")),
+        (1234567890, Ok("S1.234_567_890")),
+        (i64::MAX as u64, Ok("S9_223_372_036.854_775_807")),
+        (i64::MAX as u64 + 1, Err(EncodeError::InvalidTimestamp)),
+        (u64::MAX, Err(EncodeError::InvalidTimestamp)),
+    ] {
+        let mut encoder = Encoder::new();
+        match expected {
+            Ok(s) => {
+                encoder.append_timestamp_nanosecond(value).unwrap();
+                assert_eq!(encoder.to_string(), Ok(s.to_string()));
+            }
+            Err(e) => {
+                assert_eq!(encoder.append_timestamp_nanosecond(value), Err(e));
+            }
+        }
+    }
 }
