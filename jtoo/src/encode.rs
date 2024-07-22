@@ -116,76 +116,54 @@ impl Encoder {
 
     pub fn append_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
         self.prepare_for_new_value()?;
+        if value == 0 {
+            self.string.push_str("0.0");
+            return Ok(());
+        }
         if value.is_negative() {
             self.string.push('-')
         }
-        let digits = value.unsigned_abs().to_string();
-        struct Lengths {
-            lhs_len: usize,
-            rhs_zeroes: usize,
-            rhs_len: usize,
+        let mut digits_array = [0u8; 20];
+        let mut digits_len = 0;
+        let mut value = value.unsigned_abs();
+        while value > 0 {
+            let digit = (value % 10) as u8;
+            digits_array[digits_len] = digit;
+            digits_len += 1;
+            value /= 10;
         }
-        let lengths = if base10_exponent < 0 {
-            let rhs_len = base10_exponent.unsigned_abs() as usize;
-            let rhs_zeroes = (rhs_len as i32 - digits.len() as i32).max(0).unsigned_abs() as usize;
-            let lhs_len = (digits.len() as i32 - rhs_len as i32).max(0).unsigned_abs() as usize;
-            Lengths {
-                lhs_len,
-                rhs_zeroes,
-                rhs_len,
-            }
-        } else if base10_exponent == 0 {
-            Lengths {
-                lhs_len: digits.len(),
-                rhs_zeroes: 0,
-                rhs_len: 0,
-            }
+        let rhs_len = base10_exponent.min(0).unsigned_abs() as usize;
+        let lhs_len = if base10_exponent < 0 {
+            digits_len.saturating_sub(base10_exponent.unsigned_abs() as usize)
         } else {
-            let lhs_zeroes = base10_exponent.unsigned_abs() as usize;
-            let lhs_len = if value == 0 {
-                0
-            } else {
-                digits.len() + lhs_zeroes
-            };
-            Lengths {
-                lhs_len,
-                rhs_zeroes: 0,
-                rhs_len: 0,
-            }
+            digits_len + (base10_exponent.unsigned_abs() as usize)
         };
-        if lengths.lhs_len == 0 {
-            self.string.push('0')
+        if lhs_len == 0 {
+            self.string.push_str("0");
         }
-        let mut has_prev = false;
-        for (n, c) in digits
-            .chars()
-            .chain(repeat('0'))
-            .take(lengths.lhs_len)
+        for (n, digit) in repeat(0)
+            .take(rhs_len.saturating_sub(digits_len))
+            .chain(digits_array.iter().take(digits_len).rev().copied())
+            .chain(repeat(0))
+            .take(lhs_len + rhs_len)
             .enumerate()
         {
-            let k = lengths.lhs_len - n;
-            if has_prev && k.rem(3) == 0 {
-                self.string.push('_');
+            if (0 < n) && (n < lhs_len) {
+                if (lhs_len - n) % 3 == 0 {
+                    self.string.push('_')
+                }
+            } else if n == lhs_len {
+                self.string.push('.')
+            } else if lhs_len < n {
+                if (n - lhs_len) % 3 == 0 {
+                    self.string.push('_')
+                }
             }
-            self.string.push(c);
-            has_prev = true;
+            self.string
+                .push(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'][digit as usize])
         }
-        self.string.push('.');
-        let mut has_prev = false;
-        for (n, c) in repeat('0')
-            .take(lengths.rhs_zeroes)
-            .chain(digits.chars().skip(lengths.lhs_len))
-            .take(lengths.rhs_len)
-            .enumerate()
-        {
-            if has_prev && n.rem(3) == 0 {
-                self.string.push('_')
-            }
-            self.string.push(c);
-            has_prev = true;
-        }
-        if lengths.rhs_len == 0 {
-            self.string.push_str("0")
+        if 0 <= base10_exponent {
+            self.string.push_str(".0");
         }
         Ok(())
     }
