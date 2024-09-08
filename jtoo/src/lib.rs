@@ -51,3 +51,40 @@ mod encode;
 
 pub use decode::*;
 pub use encode::*;
+
+/// Converts a byte slice into a string using
+/// [`core::ascii::escape_default`](https://doc.rust-lang.org/core/ascii/fn.escape_default.html)
+/// to escape each byte.
+///
+/// # Example
+/// ```
+/// use jtoo::escape_ascii;
+/// assert_eq!("abc", escape_ascii(b"abc"));
+/// assert_eq!("abc\\n", escape_ascii(b"abc\n"));
+/// assert_eq!(
+///     "Euro sign: \\xe2\\x82\\xac",
+///     escape_ascii("Euro sign: \u{20AC}".as_bytes())
+/// );
+/// assert_eq!("\\x01\\x02\\x03", escape_ascii(&[1, 2, 3]));
+/// ```
+#[allow(clippy::missing_panics_doc)]
+#[must_use]
+pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
+    let mut result = String::new();
+    for byte in input.as_ref() {
+        for ascii_byte in core::ascii::escape_default(*byte) {
+            result.push_str(core::str::from_utf8(&[ascii_byte]).unwrap());
+        }
+    }
+    result
+}
+
+#[must_use]
+#[allow(clippy::missing_panics_doc)]
+pub(crate) fn escape_and_elide(input: &[u8], max_len: usize) -> String {
+    if input.len() > max_len {
+        escape_ascii(&input[..max_len]) + "..."
+    } else {
+        escape_ascii(input)
+    }
+}

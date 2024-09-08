@@ -4,10 +4,10 @@ use jtoo::{Encode, EncodeError, Encoder};
 fn encode_ok() {
     struct Struct;
     impl Encode for Struct {
-        fn encode_using(&self, packer: &mut Encoder) -> Result<(), EncodeError> {
-            packer.open_string()?;
-            packer.append_string("string1")?;
-            packer.close_string()
+        fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            encoder.open_string()?;
+            encoder.append_string("string1")?;
+            encoder.close_string()
         }
     }
     assert_eq!(Struct {}.encode(), Ok("\"string1\"".to_string()));
@@ -17,8 +17,8 @@ fn encode_ok() {
 fn encode_err() {
     struct Struct;
     impl Encode for Struct {
-        fn encode_using(&self, packer: &mut Encoder) -> Result<(), EncodeError> {
-            packer.open_string()
+        fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            encoder.open_string()
         }
     }
     assert_eq!(Struct {}.encode(), Err(EncodeError::UnclosedString));

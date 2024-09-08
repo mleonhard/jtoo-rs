@@ -5,15 +5,15 @@ struct Message {
     bool1: bool,
 }
 impl Encode for Message {
-    fn encode_using(&self, packer: &mut Encoder) -> Result<(), EncodeError> {
-        packer.open_list()?;
-        packer.open_list()?;
-        packer.open_string()?;
-        packer.append_string("bool1")?;
-        packer.close_string()?;
-        packer.append_bool(self.bool1)?;
-        packer.close_list()?;
-        packer.close_list()
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        encoder.open_list()?;
+        encoder.open_list()?;
+        encoder.open_string()?;
+        encoder.append_string("bool1")?;
+        encoder.close_string()?;
+        encoder.append_bool(self.bool1)?;
+        encoder.close_list()?;
+        encoder.close_list()
     }
 }
 #[test]

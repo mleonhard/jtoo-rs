@@ -1,17 +1,168 @@
-#[derive(Debug, Eq, PartialEq)]
-pub enum DecodeError {}
+use crate::escape_and_elide;
+use core::fmt::Debug;
+
+#[derive(Eq, PartialEq)]
+pub enum DecodeError {
+    ExpectedString(Vec<u8>),
+    UnclosedString(Vec<u8>),
+    NotUtf8(Vec<u8>),
+    ExpectedListEnd(Vec<u8>),
+    NotInList(Vec<u8>),
+    ExpectedListSeparator(Vec<u8>),
+    ExpectedNoMoreData(Vec<u8>),
+    ListEndNotConsumed(Vec<u8>),
+    DataNotConsumed(Vec<u8>),
+    ExpectedBool(Vec<u8>),
+}
+impl Debug for DecodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (prefix, b) = match self {
+            DecodeError::DataNotConsumed(b) => ("DecodeError: program error: data not consumed", b),
+            DecodeError::ExpectedBool(b) => ("DecodeError: expected bool, got", b),
+            DecodeError::ExpectedListEnd(b) => ("DecodeError: expected list end, got", b),
+            DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
+            DecodeError::ExpectedNoMoreData(b) => ("DecodeError: expected no more data, got", b),
+            DecodeError::ExpectedString(b) => ("DecodeError: expected string, got", b),
+            DecodeError::ListEndNotConsumed(b) => {
+                ("DecodeError: program error: list end not consumed, at", b)
+            }
+            DecodeError::NotInList(b) => ("DecodeError: program error: not in list, at", b),
+            DecodeError::NotUtf8(b) => ("DecodeError: expected UTF-8, got", b),
+            DecodeError::UnclosedString(b) => ("DecodeError: unclosed string, got", b),
+        };
+        write!(f, "{prefix}: '{}'", escape_and_elide(b, 40))
+    }
+}
 
 pub trait Decode {
-    fn decode(bytes: &[u8]) -> Result<Self, DecodeError>
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError>
     where
         Self: Sized;
+    fn decode(bytes: &[u8]) -> Result<Self, DecodeError>
+    where
+        Self: Sized,
+    {
+        let mut decoder = Decoder::new(bytes);
+        Self::decode_using(&mut decoder)
+    }
 }
 
 pub struct Decoder<'a> {
     bytes: &'a [u8],
+    list_depth: usize,
+    consumed_list_element: bool,
 }
 impl<'a> Decoder<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes }
+        Self {
+            bytes,
+            list_depth: 0,
+            consumed_list_element: false,
+        }
+    }
+
+    pub fn close(self) -> Result<(), DecodeError> {
+        if self.list_depth != 0 {
+            return Err(DecodeError::ListEndNotConsumed(self.debug_vec()));
+        }
+        if !self.bytes.is_empty() {
+            return Err(DecodeError::DataNotConsumed(self.debug_vec()));
+        }
+        Ok(())
+    }
+
+    fn debug_vec(&self) -> Vec<u8> {
+        Vec::from_iter(self.bytes.iter().take(21).copied())
+    }
+
+    pub fn consume_bool(&mut self) -> Result<bool, DecodeError> {
+        let value = match self.bytes.first() {
+            Some(b'T') => true,
+            Some(b'F') => false,
+            _ => return Err(DecodeError::ExpectedBool(self.debug_vec())),
+        };
+        self.consume_bytes(1);
+        self.consume_list_separator()?;
+        Ok(value)
+    }
+
+    fn consume_bytes(&mut self, n: usize) {
+        self.bytes = &self.bytes[n..];
+    }
+
+    fn consume_exact(&mut self, c: u8) -> Option<()> {
+        if self.bytes.first() == Some(&c) {
+            self.bytes = &self.bytes[1..];
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
+        self.consume_exact(b'[')
+            .ok_or_else(|| DecodeError::ExpectedString(self.debug_vec()))?;
+        self.list_depth += 1;
+        Ok(())
+    }
+
+    pub fn consume_list_separator(&mut self) -> Result<(), DecodeError> {
+        if self.list_depth == 0 {
+            Ok(())
+        } else {
+            self.consumed_list_element = true;
+            match self.bytes.first() {
+                Some(&b',') => {
+                    self.consume_bytes(1);
+                    Ok(())
+                }
+                Some(&b']') => Ok(()),
+                None => Ok(()), // Next call will try to consume list close and fail.
+                _ => Err(DecodeError::ExpectedListSeparator(self.debug_vec())),
+            }
+        }
+    }
+
+    pub fn has_another_list_item(&mut self) -> bool {
+        match self.bytes.first() {
+            None | Some(&b']') => false,
+            _ => true,
+        }
+    }
+
+    pub fn consume_close_list(&mut self) -> Result<(), DecodeError> {
+        if self.list_depth == 0 {
+            return Err(DecodeError::NotInList(self.debug_vec()));
+        }
+        self.consume_exact(b']')
+            .ok_or_else(|| DecodeError::ExpectedListEnd(self.debug_vec()))?;
+        self.consumed_list_element = false;
+        self.consume_list_separator()?;
+        self.list_depth -= 1;
+        Ok(())
+    }
+
+    pub fn consume_string(&mut self) -> Result<String, DecodeError> {
+        match self.bytes.first() {
+            Some(b'"') => {}
+            _ => return Err(DecodeError::ExpectedString(self.debug_vec())),
+        }
+        let Some((len, _)) = self
+            .bytes
+            .iter()
+            .copied()
+            .enumerate()
+            .skip(1)
+            .find(|(_n, b)| b == &b'"')
+        else {
+            return Err(DecodeError::UnclosedString(self.debug_vec()));
+        };
+        let bytes = self.bytes[1..len].to_vec();
+        // TODO: un-escape.
+        let value =
+            String::from_utf8(bytes).map_err(|_e| DecodeError::NotUtf8(self.debug_vec()))?;
+        self.consume_bytes(len + 1);
+        self.consume_list_separator()?;
+        Ok(value)
     }
 }

@@ -26,7 +26,7 @@ pub enum EncodeError {
 }
 
 pub trait Encode {
-    fn encode_using(&self, packer: &mut Encoder) -> Result<(), EncodeError>;
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError>;
     fn encode(&self) -> Result<String, EncodeError> {
         let mut encoder = Encoder::new();
         self.encode_using(&mut encoder)?;
