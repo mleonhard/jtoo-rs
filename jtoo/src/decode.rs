@@ -1,17 +1,21 @@
-use crate::escape_and_elide;
+use crate::escape_ascii;
 use core::fmt::Debug;
 
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
     DataNotConsumed(Vec<u8>),
     ExpectedBool(Vec<u8>),
+    ExpectedInteger(Vec<u8>),
     ExpectedListEnd(Vec<u8>),
     ExpectedListSeparator(Vec<u8>),
     ExpectedNoMoreData(Vec<u8>),
     ExpectedString(Vec<u8>),
+    ExtraLeadingZeroes(Vec<u8>),
     IncompleteEscape(Vec<u8>),
+    IncorrectDigitGrouping(Vec<u8>),
     InvalidEscape(Vec<u8>),
     ListEndNotConsumed(Vec<u8>),
+    NegativeZero(Vec<u8>),
     NotInList(Vec<u8>),
     NotUtf8(Vec<u8>),
     UnclosedString(Vec<u8>),
@@ -21,20 +25,24 @@ impl Debug for DecodeError {
         let (prefix, b) = match self {
             DecodeError::DataNotConsumed(b) => ("DecodeError: program error: data not consumed", b),
             DecodeError::ExpectedBool(b) => ("DecodeError: expected bool, got", b),
+            DecodeError::ExpectedInteger(b) => ("DecodeError: expected integer, got", b),
             DecodeError::ExpectedListEnd(b) => ("DecodeError: expected list end, got", b),
             DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
             DecodeError::ExpectedNoMoreData(b) => ("DecodeError: expected no more data, got", b),
             DecodeError::ExpectedString(b) => ("DecodeError: expected string, got", b),
+            DecodeError::ExtraLeadingZeroes(b) => ("DecodeError: expected single zero, got", b),
             DecodeError::IncompleteEscape(b) => ("DecodeError: incomplete escape sequence", b),
+            DecodeError::IncorrectDigitGrouping(b) => ("DecodeError: incorrect digit grouping", b),
             DecodeError::InvalidEscape(b) => ("DecodeError: invalid escape sequence", b),
             DecodeError::ListEndNotConsumed(b) => {
                 ("DecodeError: program error: list end not consumed, at", b)
             }
+            DecodeError::NegativeZero(b) => ("DecodeError: got negative zero", b),
             DecodeError::NotInList(b) => ("DecodeError: program error: not in list, at", b),
             DecodeError::NotUtf8(b) => ("DecodeError: expected UTF-8, got", b),
             DecodeError::UnclosedString(b) => ("DecodeError: unclosed string, got", b),
         };
-        write!(f, "{prefix}: '{}'", escape_and_elide(b, 40))
+        write!(f, "{prefix}: '{}'", escape_ascii(b))
     }
 }
 
@@ -101,6 +109,74 @@ impl<'a> Decoder<'a> {
         } else {
             None
         }
+    }
+
+    pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
+        let mut bytes = self.bytes.iter();
+        let mut len = 0;
+        let Some(b0) = self.bytes.first().copied() else {
+            return Err(DecodeError::ExpectedInteger(self.debug_vec()));
+        };
+        let is_positive: bool = match b0 {
+            b'-' => {
+                bytes.next();
+                len += 1;
+                false
+            }
+            b'0'..=b'9' => true,
+            _ => return Err(DecodeError::ExpectedInteger(self.debug_vec())),
+        };
+        let Some(b1) = bytes.next().copied() else {
+            return Err(DecodeError::ExpectedInteger(self.debug_vec()));
+        };
+        len += 1;
+        let mut value = i64::from(b1 - b'0');
+        let mut saw_underscore = false;
+        let mut digits_after_underscore = 0u8;
+        while let Some(b) = bytes.next().copied() {
+            len += 1;
+            let d = match b {
+                b'0' => {
+                    if value == 0 {
+                        return Err(DecodeError::ExtraLeadingZeroes(self.debug_vec()));
+                    }
+                    if saw_underscore {
+                        digits_after_underscore += 1;
+                    }
+                    i64::from(b - b'0')
+                }
+                b'1'..=b'9' => {
+                    if saw_underscore {
+                        digits_after_underscore += 1;
+                    }
+                    i64::from(b - b'0')
+                }
+                b'_' => {
+                    if saw_underscore && digits_after_underscore != 3 {
+                        return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
+                    }
+                    saw_underscore = true;
+                    digits_after_underscore = 0;
+                    continue;
+                }
+                _ => break,
+            };
+            value *= 10;
+            value += d;
+        }
+        if saw_underscore && digits_after_underscore != 3 {
+            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
+        }
+        let result = if is_positive {
+            Ok(value)
+        } else if value == 0 {
+            return Err(DecodeError::NegativeZero(self.debug_vec()));
+        } else {
+            Ok(-value)
+        };
+        self.consume_bytes(len);
+        self.consume_list_separator()?;
+        result
     }
 
     pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {

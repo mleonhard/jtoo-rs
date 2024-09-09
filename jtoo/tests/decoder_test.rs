@@ -17,11 +17,65 @@ fn consume_bool() {
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
-        assert_eq!(
-            decoder.consume_bool(),
-            expected,
-            "bytes={bytes:?} expected={expected:?}"
-        );
+        assert_eq!(decoder.consume_bool(), expected, "{}", msg);
+        if expected.is_ok() {
+            decoder.close().expect(&msg);
+        }
+    }
+}
+
+#[test]
+fn consume_integer() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(DecodeError::ExpectedInteger(vec![]))),
+        (
+            b"\"a\"",
+            Err(DecodeError::ExpectedInteger(b"\"a\"".to_vec())),
+        ),
+        (b"T", Err(DecodeError::ExpectedInteger(b"T".to_vec()))),
+        (b"!", Err(DecodeError::ExpectedInteger(b"!".to_vec()))),
+        (b"0", Ok(0)),
+        (b"1", Ok(1)),
+        (b"10", Ok(10)),
+        (b"100", Ok(100)),
+        (b"1_000", Ok(1000)),
+        (b"10_000", Ok(10000)),
+        (b"100_000", Ok(100000)),
+        (b"1_000_000", Ok(1000000)),
+        (b"-1_000_000", Ok(-1000000)),
+        (b"-100_000", Ok(-100000)),
+        (b"-10_000", Ok(-10000)),
+        (b"-1_000", Ok(-1000)),
+        (b"-100", Ok(-100)),
+        (b"-10", Ok(-10)),
+        (b"-1", Ok(-1)),
+        (b"9_223_372_036_854_775_807", Ok(i64::MAX)),
+        (b"-0", Err(DecodeError::NegativeZero(b"-0".to_vec()))),
+        (
+            b"-00",
+            Err(DecodeError::ExtraLeadingZeroes(b"-00".to_vec())),
+        ),
+        (b"00", Err(DecodeError::ExtraLeadingZeroes(b"00".to_vec()))),
+        (
+            b"1_",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_".to_vec())),
+        ),
+        (
+            b"1_0",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_0".to_vec())),
+        ),
+        (
+            b"1_00",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_00".to_vec())),
+        ),
+        (
+            b"-1_00",
+            Err(DecodeError::IncorrectDigitGrouping(b"-1_00".to_vec())),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        assert_eq!(decoder.consume_integer(), expected, "{}", msg);
         if expected.is_ok() {
             decoder.close().expect(&msg);
         }

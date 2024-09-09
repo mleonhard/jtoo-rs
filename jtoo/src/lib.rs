@@ -78,13 +78,3 @@ pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
     }
     result
 }
-
-#[must_use]
-#[allow(clippy::missing_panics_doc)]
-pub(crate) fn escape_and_elide(input: &[u8], max_len: usize) -> String {
-    if input.len() > max_len {
-        escape_ascii(&input[..max_len]) + "..."
-    } else {
-        escape_ascii(input)
-    }
-}
