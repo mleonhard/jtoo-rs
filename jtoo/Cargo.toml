@@ -10,3 +10,4 @@ repository = "https://github.com/mleonhard/jtoo-rs"
 version = "0.1.0"
 
 [dependencies]
+safe-regex = "0.3"

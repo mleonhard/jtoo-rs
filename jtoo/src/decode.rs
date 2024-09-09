@@ -1,5 +1,6 @@
 use crate::escape_ascii;
 use core::fmt::Debug;
+use safe_regex::regex;
 
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
@@ -112,71 +113,41 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
-        let mut bytes = self.bytes.iter();
-        let mut len = 0;
-        let Some(b0) = self.bytes.first().copied() else {
+        let len = self
+            .bytes
+            .iter()
+            .copied()
+            .take_while(|b| match *b {
+                b'-' | b'0'..=b'9' | b'_' => true,
+                _ => false,
+            })
+            .count();
+        let bytes = &self.bytes[..len];
+        // TODO: Update safe-regex is_match to short-circuit .* and not process remaining data.  Then delete `len`.
+        if !regex!(br"-?[_0-9]+").is_match(bytes) {
             return Err(DecodeError::ExpectedInteger(self.debug_vec()));
-        };
-        let is_positive: bool = match b0 {
-            b'-' => {
-                bytes.next();
-                len += 1;
-                false
-            }
-            b'0'..=b'9' => true,
-            _ => return Err(DecodeError::ExpectedInteger(self.debug_vec())),
-        };
-        let Some(b1) = bytes.next().copied() else {
-            return Err(DecodeError::ExpectedInteger(self.debug_vec()));
-        };
-        len += 1;
-        let mut value = i64::from(b1 - b'0');
-        let mut saw_underscore = false;
-        let mut digits_after_underscore = 0u8;
-        while let Some(b) = bytes.next().copied() {
-            len += 1;
-            let d = match b {
-                b'0' => {
-                    if value == 0 {
-                        return Err(DecodeError::ExtraLeadingZeroes(self.debug_vec()));
-                    }
-                    if saw_underscore {
-                        digits_after_underscore += 1;
-                    }
-                    i64::from(b - b'0')
-                }
-                b'1'..=b'9' => {
-                    if saw_underscore {
-                        digits_after_underscore += 1;
-                    }
-                    i64::from(b - b'0')
-                }
-                b'_' => {
-                    if saw_underscore && digits_after_underscore != 3 {
-                        return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
-                    }
-                    saw_underscore = true;
-                    digits_after_underscore = 0;
-                    continue;
-                }
-                _ => break,
-            };
+        }
+        let (sign, digits) = regex!(br"(-?)([0-9]{1,3}(?:_[0-9]{3})*)(?:[^_0-9].*)?")
+            .match_slices(bytes)
+            .ok_or_else(|| DecodeError::IncorrectDigitGrouping(self.debug_vec()))?;
+        if !regex!(br"-?(?:0|0_?[1-9].*|[1-9].*)").is_match(bytes) {
+            return Err(DecodeError::ExtraLeadingZeroes(self.debug_vec()));
+        }
+        let mut value = 0;
+        for b in digits.iter().copied().filter(|b| (b'0'..=b'9').contains(b)) {
             value *= 10;
-            value += d;
+            value += i64::from(b - b'0');
         }
-        if saw_underscore && digits_after_underscore != 3 {
-            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
+        if !sign.is_empty() {
+            if value == 0 {
+                return Err(DecodeError::NegativeZero(self.debug_vec()));
+            } else {
+                value *= -1
+            }
         }
-        let result = if is_positive {
-            Ok(value)
-        } else if value == 0 {
-            return Err(DecodeError::NegativeZero(self.debug_vec()));
-        } else {
-            Ok(-value)
-        };
-        self.consume_bytes(len);
+        self.consume_bytes(sign.len() + digits.len());
         self.consume_list_separator()?;
-        result
+        Ok(value)
     }
 
     pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
