@@ -164,27 +164,6 @@ impl<'a> Decoder<'a> {
         let s = core::str::from_utf8(&self.bytes[1..len])
             .map_err(|_e| DecodeError::NotUtf8(self.debug_vec()))?;
         let mut value = String::with_capacity(len - 1);
-        fn from_hex(c: char) -> Option<u8> {
-            match c {
-                '0' => Some(0),
-                '1' => Some(1),
-                '2' => Some(2),
-                '3' => Some(3),
-                '4' => Some(4),
-                '5' => Some(5),
-                '6' => Some(6),
-                '7' => Some(7),
-                '8' => Some(8),
-                '9' => Some(9),
-                'a' => Some(10),
-                'b' => Some(11),
-                'c' => Some(12),
-                'd' => Some(13),
-                'e' => Some(14),
-                'f' => Some(15),
-                _ => None,
-            }
-        }
         let mut chars = s.chars();
         while let Some(c) = chars.next() {
             if c == '\\' {
@@ -199,21 +178,19 @@ impl<'a> Decoder<'a> {
                             .into_bytes(),
                     ));
                 };
-                let (Some(b1), Some(b2)) = (from_hex(c1), from_hex(c2)) else {
+                let (Some(b1), Some(b2)) = (c1.to_digit(16), c2.to_digit(16)) else {
                     return Err(DecodeError::InvalidEscape(
                         format!("\\{c1}{c2}").into_bytes(),
                     ));
                 };
                 let b = 16 * b1 + b2;
                 match b {
-                    0x00 | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | // Allowed.
-                    0x08 | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x0e | 0x0f | //
-                    0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x15 | 0x16 | 0x17 | // 
-                    0x18 | 0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e | 0x1f | //
-                    0x22 | 0x5c | 0x7f => value.push(char::from(b)),
-                    _ => return Err(DecodeError::InvalidEscape(
-                        format!("\\{c1}{c2}").into_bytes(),
-                    ))
+                    0x00..=0x1f | 0x22 | 0x5c | 0x7f => value.push(char::from_u32(b).unwrap()),
+                    _ => {
+                        return Err(DecodeError::InvalidEscape(
+                            format!("\\{c1}{c2}").into_bytes(),
+                        ))
+                    }
                 }
             } else {
                 value.push(c);

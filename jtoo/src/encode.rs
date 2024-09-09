@@ -322,32 +322,14 @@ impl Encoder {
     }
 
     pub fn append_byte_string(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
-        #[inline]
-        fn to_hex(b: u8) -> char {
-            match b {
-                0 => '0',
-                1 => '1',
-                2 => '2',
-                3 => '3',
-                4 => '4',
-                5 => '5',
-                6 => '6',
-                7 => '7',
-                8 => '8',
-                9 => '9',
-                10 => 'a',
-                11 => 'b',
-                12 => 'c',
-                13 => 'd',
-                14 => 'e',
-                15 => 'f',
-                _ => unreachable!(),
-            }
-        }
         if self.stack.last() == Some(&Elem::ByteString) {
             for b in bytes {
-                self.string.push(to_hex(b >> 4));
-                self.string.push(to_hex(b & 0x0F));
+                let d1 = u32::from(b >> 4);
+                let d2 = u32::from(b & 0x0F);
+                let c1 = char::from_digit(d1, 16).unwrap();
+                let c2 = char::from_digit(d2, 16).unwrap();
+                self.string.push(c1);
+                self.string.push(c2);
             }
             Ok(())
         } else {
@@ -504,12 +486,25 @@ impl Encoder {
     }
 
     pub fn append_string(&mut self, s: &str) -> Result<(), EncodeError> {
-        if self.stack.last() == Some(&Elem::String) {
-            self.string.push_str(s);
-            Ok(())
-        } else {
-            Err(EncodeError::NotInString)
+        if self.stack.last() != Some(&Elem::String) {
+            return Err(EncodeError::NotInString);
         }
+        for c in s.chars() {
+            let codepoint = c as u32;
+            match codepoint {
+                0x00..=0x1f | 0x22 | 0x5c | 0x7f => {
+                    let d1 = codepoint >> 4;
+                    let d2 = codepoint & 0x0F;
+                    let c1 = char::from_digit(d1, 16).unwrap();
+                    let c2 = char::from_digit(d2, 16).unwrap();
+                    self.string.push('\\');
+                    self.string.push(c1);
+                    self.string.push(c2);
+                }
+                _ => self.string.push(c),
+            }
+        }
+        Ok(())
     }
 
     pub fn close_string(&mut self) -> Result<(), EncodeError> {

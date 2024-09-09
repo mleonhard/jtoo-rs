@@ -324,12 +324,31 @@ fn string_empty() {
 }
 
 #[test]
-fn string_value() {
+fn string_ok() {
     let mut encoder = Encoder::new();
     encoder.open_string().unwrap();
     encoder.append_string("string1").unwrap();
     encoder.close_string().unwrap();
     assert_eq!(encoder.into_string(), Ok("\"string1\"".to_string()));
+}
+
+#[test]
+fn string_ok2() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    encoder.append_string("a").unwrap();
+    encoder.append_string("b").unwrap();
+    encoder.close_string().unwrap();
+    assert_eq!(encoder.into_string(), Ok("\"ab\"".to_string()));
+}
+
+#[test]
+fn string_escaped() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    encoder.append_string("\x00 \x01 \x02 \x03 \x04 \x05 \x06 \x07 \x08 \x09 \x0a \x0b \x0c \x0d \x0e \x0f \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17 \x18 \x19 \x1a \x1b \x1c \x1d \x1e \x1f \" \\ \x7f").unwrap();
+    encoder.close_string().unwrap();
+    assert_eq!(encoder.into_string(), Ok(r#""\00 \01 \02 \03 \04 \05 \06 \07 \08 \09 \0a \0b \0c \0d \0e \0f \10 \11 \12 \13 \14 \15 \16 \17 \18 \19 \1a \1b \1c \1d \1e \1f \22 \5c \7f""#.to_string()));
 }
 
 #[test]
@@ -360,7 +379,7 @@ fn close_string() {
 }
 
 #[test]
-fn append_string() {
+fn not_in_string() {
     let mut encoder = Encoder::new();
     encoder.open_list().unwrap();
     assert_eq!(encoder.append_string("x"), Err(EncodeError::NotInString));
