@@ -38,19 +38,30 @@ fn consume_string() {
             Err(DecodeError::UnclosedString(b"\"abc".to_vec())),
         ),
         (b"\"abc\"", Ok("abc".to_string())),
+        (&[b'"', 0xe4, 0xbd, 0xa0, b'"'], Ok("你".to_string())),
         (
             &[b'"', 0xe4, 0xbd, b'"'],
             Err(DecodeError::NotUtf8(b"\"\xe4\xbd\"".to_vec())),
         ),
-        (&[b'"', 0xe4, 0xbd, 0xa0, b'"'], Ok("你".to_string())),
+        (b"\"\\\"", Err(DecodeError::IncompleteEscape(b"\\\"".to_vec()))),
+        (b"\"\\0\"", Err(DecodeError::IncompleteEscape(b"\\0\"".to_vec()))),
+        (b"\"\\g0\"", Err(DecodeError::InvalidEscape(b"\\g0".to_vec()))),
+        (b"\"\\0g\"", Err(DecodeError::InvalidEscape(b"\\0g".to_vec()))),
+        (b"\"\\20\"", Err(DecodeError::InvalidEscape(b"\\20".to_vec()))),
+        (b"\"\\21\"", Err(DecodeError::InvalidEscape(b"\\21".to_vec()))),
+        (b"\"\\5b\"", Err(DecodeError::InvalidEscape(b"\\5b".to_vec()))),
+        (b"\"\\5d\"", Err(DecodeError::InvalidEscape(b"\\5d".to_vec()))),
+        (b"\"\\7e\"", Err(DecodeError::InvalidEscape(b"\\7e".to_vec()))),
+        (b"\"\\80\"", Err(DecodeError::InvalidEscape(b"\\80".to_vec()))),
+        (b"\"\\ff\"", Err(DecodeError::InvalidEscape(b"\\ff".to_vec()))),
+        (
+            br#""\00 \01 \02 \03 \04 \05 \06 \07 \08 \09 \0a \0b \0c \0d \0e \0f \10 \11 \12 \13 \14 \15 \16 \17 \18 \19 \1a \1b \1c \1d \1e \1f \22 \5c \7f""#,
+            Ok("\x00 \x01 \x02 \x03 \x04 \x05 \x06 \x07 \x08 \x09 \x0a \x0b \x0c \x0d \x0e \x0f \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17 \x18 \x19 \x1a \x1b \x1c \x1d \x1e \x1f \" \\ \x7f".to_string()),
+        ),
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
-        assert_eq!(
-            decoder.consume_string(),
-            expected,
-            "bytes={bytes:?} expected={expected:?}"
-        );
+        assert_eq!(decoder.consume_string(), expected, "{}", msg);
         if expected.is_ok() {
             decoder.close().expect(&msg);
         }

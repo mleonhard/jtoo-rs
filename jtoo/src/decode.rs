@@ -3,16 +3,18 @@ use core::fmt::Debug;
 
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
-    ExpectedString(Vec<u8>),
-    UnclosedString(Vec<u8>),
-    NotUtf8(Vec<u8>),
-    ExpectedListEnd(Vec<u8>),
-    NotInList(Vec<u8>),
-    ExpectedListSeparator(Vec<u8>),
-    ExpectedNoMoreData(Vec<u8>),
-    ListEndNotConsumed(Vec<u8>),
     DataNotConsumed(Vec<u8>),
     ExpectedBool(Vec<u8>),
+    ExpectedListEnd(Vec<u8>),
+    ExpectedListSeparator(Vec<u8>),
+    ExpectedNoMoreData(Vec<u8>),
+    ExpectedString(Vec<u8>),
+    IncompleteEscape(Vec<u8>),
+    InvalidEscape(Vec<u8>),
+    ListEndNotConsumed(Vec<u8>),
+    NotInList(Vec<u8>),
+    NotUtf8(Vec<u8>),
+    UnclosedString(Vec<u8>),
 }
 impl Debug for DecodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -23,6 +25,8 @@ impl Debug for DecodeError {
             DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
             DecodeError::ExpectedNoMoreData(b) => ("DecodeError: expected no more data, got", b),
             DecodeError::ExpectedString(b) => ("DecodeError: expected string, got", b),
+            DecodeError::IncompleteEscape(b) => ("DecodeError: incomplete escape sequence", b),
+            DecodeError::InvalidEscape(b) => ("DecodeError: invalid escape sequence", b),
             DecodeError::ListEndNotConsumed(b) => {
                 ("DecodeError: program error: list end not consumed, at", b)
             }
@@ -157,10 +161,64 @@ impl<'a> Decoder<'a> {
         else {
             return Err(DecodeError::UnclosedString(self.debug_vec()));
         };
-        let bytes = self.bytes[1..len].to_vec();
-        // TODO: un-escape.
-        let value =
-            String::from_utf8(bytes).map_err(|_e| DecodeError::NotUtf8(self.debug_vec()))?;
+        let s = core::str::from_utf8(&self.bytes[1..len])
+            .map_err(|_e| DecodeError::NotUtf8(self.debug_vec()))?;
+        let mut value = String::with_capacity(len - 1);
+        fn from_hex(c: char) -> Option<u8> {
+            match c {
+                '0' => Some(0),
+                '1' => Some(1),
+                '2' => Some(2),
+                '3' => Some(3),
+                '4' => Some(4),
+                '5' => Some(5),
+                '6' => Some(6),
+                '7' => Some(7),
+                '8' => Some(8),
+                '9' => Some(9),
+                'a' => Some(10),
+                'b' => Some(11),
+                'c' => Some(12),
+                'd' => Some(13),
+                'e' => Some(14),
+                'f' => Some(15),
+                _ => None,
+            }
+        }
+        let mut chars = s.chars();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                let opt_c1 = chars.next();
+                let opt_c2 = chars.next();
+                let (Some(c1), Some(c2)) = (opt_c1, opt_c2) else {
+                    return Err(DecodeError::IncompleteEscape(
+                        [Some('\\'), opt_c1, opt_c2, Some('"')]
+                            .iter()
+                            .flatten()
+                            .collect::<String>()
+                            .into_bytes(),
+                    ));
+                };
+                let (Some(b1), Some(b2)) = (from_hex(c1), from_hex(c2)) else {
+                    return Err(DecodeError::InvalidEscape(
+                        format!("\\{c1}{c2}").into_bytes(),
+                    ));
+                };
+                let b = 16 * b1 + b2;
+                match b {
+                    0x00 | 0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | // Allowed.
+                    0x08 | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x0e | 0x0f | //
+                    0x10 | 0x11 | 0x12 | 0x13 | 0x14 | 0x15 | 0x16 | 0x17 | // 
+                    0x18 | 0x19 | 0x1a | 0x1b | 0x1c | 0x1d | 0x1e | 0x1f | //
+                    0x22 | 0x5c | 0x7f => value.push(char::from(b)),
+                    _ => return Err(DecodeError::InvalidEscape(
+                        format!("\\{c1}{c2}").into_bytes(),
+                    ))
+                }
+            } else {
+                value.push(c);
+            }
+        }
         self.consume_bytes(len + 1);
         self.consume_list_separator()?;
         Ok(value)
