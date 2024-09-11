@@ -169,6 +169,39 @@ fn consume_string() {
 }
 
 #[test]
+fn consume_year() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(DecodeError::ExpectedYear(vec![]))),
+        (b"T", Err(DecodeError::ExpectedYear(b"T".to_vec()))),
+        (b"!", Err(DecodeError::ExpectedYear(b"!".to_vec()))),
+        (b"D0", Err(DecodeError::MalformedYear(b"D0".to_vec()))),
+        (b"D00", Err(DecodeError::MalformedYear(b"D00".to_vec()))),
+        (b"D000", Err(DecodeError::MalformedYear(b"D000".to_vec()))),
+        (
+            b"D0000",
+            Err(DecodeError::YearOutOfRange(b"D0000".to_vec())),
+        ),
+        (b"D0001", Ok(1u16)),
+        (b"D2024", Ok(2024)),
+        (b"D9999", Ok(9999)),
+        (b"D999a", Err(DecodeError::MalformedYear(b"D999a".to_vec()))),
+    ] {
+        let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        assert_eq!(decoder.consume_year(), expected, "{}", msg);
+        if expected.is_ok() {
+            decoder.close().expect(&msg);
+        }
+    }
+    let mut decoder = Decoder::new(b"D10000");
+    decoder.consume_year().unwrap();
+    assert_eq!(
+        decoder.close(),
+        Err(DecodeError::DataNotConsumed(b"0".to_vec()))
+    );
+}
+
+#[test]
 fn list_missing_separator() {
     let mut decoder = Decoder::new(b"[TT]");
     decoder.consume_open_list().unwrap();

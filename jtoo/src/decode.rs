@@ -1,6 +1,30 @@
 use crate::escape_ascii;
 use core::fmt::Debug;
 
+trait ByteIterExt: Iterator<Item = u8> {
+    fn next_decimal_digit(&mut self) -> Option<u8>;
+}
+impl<T> ByteIterExt for T
+where
+    T: Iterator<Item = u8>,
+{
+    fn next_decimal_digit(&mut self) -> Option<u8> {
+        match self.next() {
+            Some(b'0') => Some(0),
+            Some(b'1') => Some(1),
+            Some(b'2') => Some(2),
+            Some(b'3') => Some(3),
+            Some(b'4') => Some(4),
+            Some(b'5') => Some(5),
+            Some(b'6') => Some(6),
+            Some(b'7') => Some(7),
+            Some(b'8') => Some(8),
+            Some(b'9') => Some(9),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
     DataNotConsumed(Vec<u8>),
@@ -10,16 +34,19 @@ pub enum DecodeError {
     ExpectedListSeparator(Vec<u8>),
     ExpectedNoMoreData(Vec<u8>),
     ExpectedString(Vec<u8>),
+    ExpectedYear(Vec<u8>),
     ExtraLeadingZeroes(Vec<u8>),
     IncompleteEscape(Vec<u8>),
     IncorrectDigitGrouping(Vec<u8>),
     IntegerTooLarge(Vec<u8>),
     InvalidEscape(Vec<u8>),
     ListEndNotConsumed(Vec<u8>),
+    MalformedYear(Vec<u8>),
     NegativeZero(Vec<u8>),
     NotInList(Vec<u8>),
     NotUtf8(Vec<u8>),
     UnclosedString(Vec<u8>),
+    YearOutOfRange(Vec<u8>),
 }
 impl Debug for DecodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,6 +58,7 @@ impl Debug for DecodeError {
             DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
             DecodeError::ExpectedNoMoreData(b) => ("DecodeError: expected no more data, got", b),
             DecodeError::ExpectedString(b) => ("DecodeError: expected string, got", b),
+            DecodeError::ExpectedYear(b) => ("DecodeError: expected year, got", b),
             DecodeError::ExtraLeadingZeroes(b) => ("DecodeError: expected single zero, got", b),
             DecodeError::IncompleteEscape(b) => ("DecodeError: incomplete escape sequence", b),
             DecodeError::IncorrectDigitGrouping(b) => ("DecodeError: incorrect digit grouping", b),
@@ -39,10 +67,12 @@ impl Debug for DecodeError {
             DecodeError::ListEndNotConsumed(b) => {
                 ("DecodeError: program error: list end not consumed, at", b)
             }
+            DecodeError::MalformedYear(b) => ("DecodeError: got malformed year", b),
             DecodeError::NegativeZero(b) => ("DecodeError: got negative zero", b),
             DecodeError::NotInList(b) => ("DecodeError: program error: not in list, at", b),
             DecodeError::NotUtf8(b) => ("DecodeError: expected UTF-8, got", b),
             DecodeError::UnclosedString(b) => ("DecodeError: unclosed string, got", b),
+            DecodeError::YearOutOfRange(b) => ("DecodeError: year out of range", b),
         };
         write!(f, "{prefix}: '{}'", escape_ascii(b))
     }
@@ -197,6 +227,27 @@ impl<'a> Decoder<'a> {
                 _ => Err(DecodeError::ExpectedListSeparator(self.debug_vec())),
             }
         }
+    }
+
+    pub fn consume_year(&mut self) -> Result<u16, DecodeError> {
+        let mut bytes = self.bytes.iter().copied();
+        if bytes.next() != Some(b'D') {
+            return Err(DecodeError::ExpectedYear(self.debug_vec()));
+        }
+        let mut value = 0;
+        for _ in 0..4 {
+            let d = bytes
+                .next_decimal_digit()
+                .ok_or_else(|| DecodeError::MalformedYear(self.debug_vec()))?;
+            value *= 10;
+            value += u16::from(d);
+        }
+        if value == 0 {
+            return Err(DecodeError::YearOutOfRange(self.debug_vec()));
+        }
+        self.consume_bytes(5);
+        self.consume_list_separator()?;
+        Ok(value)
     }
 
     pub fn has_another_list_item(&mut self) -> bool {
