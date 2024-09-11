@@ -2,6 +2,7 @@ use jtoo::{Decode, DecodeError, Decoder};
 
 #[test]
 fn decode() {
+    // TODO: Derive Decode.
     #[derive(Debug, Eq, PartialEq)]
     struct Struct(String);
     impl Decode for Struct {

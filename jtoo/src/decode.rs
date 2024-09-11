@@ -1,6 +1,5 @@
 use crate::escape_ascii;
 use core::fmt::Debug;
-use safe_regex::regex;
 
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
@@ -14,6 +13,7 @@ pub enum DecodeError {
     ExtraLeadingZeroes(Vec<u8>),
     IncompleteEscape(Vec<u8>),
     IncorrectDigitGrouping(Vec<u8>),
+    IntegerTooLarge(Vec<u8>),
     InvalidEscape(Vec<u8>),
     ListEndNotConsumed(Vec<u8>),
     NegativeZero(Vec<u8>),
@@ -34,6 +34,7 @@ impl Debug for DecodeError {
             DecodeError::ExtraLeadingZeroes(b) => ("DecodeError: expected single zero, got", b),
             DecodeError::IncompleteEscape(b) => ("DecodeError: incomplete escape sequence", b),
             DecodeError::IncorrectDigitGrouping(b) => ("DecodeError: incorrect digit grouping", b),
+            DecodeError::IntegerTooLarge(b) => ("DecodeError: integer is too large", b),
             DecodeError::InvalidEscape(b) => ("DecodeError: invalid escape sequence", b),
             DecodeError::ListEndNotConsumed(b) => {
                 ("DecodeError: program error: list end not consumed, at", b)
@@ -85,7 +86,7 @@ impl<'a> Decoder<'a> {
     }
 
     fn debug_vec(&self) -> Vec<u8> {
-        Vec::from_iter(self.bytes.iter().take(21).copied())
+        Vec::from_iter(self.bytes.iter().take(30).copied())
     }
 
     pub fn consume_bool(&mut self) -> Result<bool, DecodeError> {
@@ -113,39 +114,63 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
-        let len = self
-            .bytes
-            .iter()
-            .copied()
-            .take_while(|b| match *b {
-                b'-' | b'0'..=b'9' | b'_' => true,
-                _ => false,
-            })
-            .count();
-        let bytes = &self.bytes[..len];
-        // TODO: Update safe-regex is_match to short-circuit .* and not process remaining data.  Then delete `len`.
-        if !regex!(br"-?[_0-9]+").is_match(bytes) {
+        let mut sign = 1i64;
+        let mut len = 0;
+        let mut seen_underscore = false;
+        let mut group_digit_count = 0u16;
+        let mut value = 0i64;
+        for b in self.bytes {
+            match *b {
+                b'-' => {
+                    if len == 0 {
+                        sign = -1;
+                    } else {
+                        return Err(DecodeError::ExpectedInteger(self.debug_vec()));
+                    }
+                }
+                b'0'..=b'9' => {
+                    group_digit_count += 1;
+                    let d = i64::from(b - b'0');
+                    value = value
+                        .checked_mul(10)
+                        .ok_or_else(|| DecodeError::IntegerTooLarge(self.debug_vec()))?;
+                    value = value
+                        .checked_add(sign * d)
+                        .ok_or_else(|| DecodeError::IntegerTooLarge(self.debug_vec()))?;
+                    if value == 0 && 1 < group_digit_count {
+                        return Err(DecodeError::ExtraLeadingZeroes(self.debug_vec()));
+                    }
+                }
+                b'_' => {
+                    if seen_underscore {
+                        if group_digit_count != 3 {
+                            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
+                        }
+                    } else {
+                        if value == 0 {
+                            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
+                        }
+                    }
+                    seen_underscore = true;
+                    group_digit_count = 0;
+                }
+                _ => break,
+            }
+            len += 1;
+        }
+        if value == 0 && group_digit_count == 0 {
             return Err(DecodeError::ExpectedInteger(self.debug_vec()));
         }
-        let (sign, digits) = regex!(br"(-?)([0-9]{1,3}(?:_[0-9]{3})*)(?:[^_0-9].*)?")
-            .match_slices(bytes)
-            .ok_or_else(|| DecodeError::IncorrectDigitGrouping(self.debug_vec()))?;
-        if !regex!(br"-?(?:0|0_?[1-9].*|[1-9].*)").is_match(bytes) {
-            return Err(DecodeError::ExtraLeadingZeroes(self.debug_vec()));
+        if seen_underscore && group_digit_count != 3 {
+            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
         }
-        let mut value = 0;
-        for b in digits.iter().copied().filter(|b| (b'0'..=b'9').contains(b)) {
-            value *= 10;
-            value += i64::from(b - b'0');
+        if !seen_underscore && 3 < group_digit_count {
+            return Err(DecodeError::IncorrectDigitGrouping(self.debug_vec()));
         }
-        if !sign.is_empty() {
-            if value == 0 {
-                return Err(DecodeError::NegativeZero(self.debug_vec()));
-            } else {
-                value *= -1
-            }
+        if sign == -1 && value == 0 {
+            return Err(DecodeError::NegativeZero(self.debug_vec()));
         }
-        self.consume_bytes(sign.len() + digits.len());
+        self.consume_bytes(len);
         self.consume_list_separator()?;
         Ok(value)
     }

@@ -34,6 +34,7 @@ fn consume_integer() {
         ),
         (b"T", Err(DecodeError::ExpectedInteger(b"T".to_vec()))),
         (b"!", Err(DecodeError::ExpectedInteger(b"!".to_vec()))),
+        (b"-0", Err(DecodeError::NegativeZero(b"-0".to_vec()))),
         (b"0", Ok(0)),
         (b"1", Ok(1)),
         (b"10", Ok(10)),
@@ -50,6 +51,19 @@ fn consume_integer() {
         (b"-10", Ok(-10)),
         (b"-1", Ok(-1)),
         (b"9_223_372_036_854_775_807", Ok(i64::MAX)),
+        (
+            b"9_223_372_036_854_775_808",
+            Err(DecodeError::IntegerTooLarge(
+                b"9_223_372_036_854_775_808".to_vec(),
+            )),
+        ),
+        (b"-9_223_372_036_854_775_808", Ok(i64::MIN)),
+        (
+            b"-9_223_372_036_854_775_809",
+            Err(DecodeError::IntegerTooLarge(
+                b"-9_223_372_036_854_775_809".to_vec(),
+            )),
+        ),
         (b"-0", Err(DecodeError::NegativeZero(b"-0".to_vec()))),
         (
             b"-00",
@@ -57,8 +71,20 @@ fn consume_integer() {
         ),
         (b"00", Err(DecodeError::ExtraLeadingZeroes(b"00".to_vec()))),
         (
+            b"1000",
+            Err(DecodeError::IncorrectDigitGrouping(b"1000".to_vec())),
+        ),
+        (
+            b"_",
+            Err(DecodeError::IncorrectDigitGrouping(b"_".to_vec())),
+        ),
+        (
             b"1_",
             Err(DecodeError::IncorrectDigitGrouping(b"1_".to_vec())),
+        ),
+        (
+            b"_1",
+            Err(DecodeError::IncorrectDigitGrouping(b"_1".to_vec())),
         ),
         (
             b"1_0",
@@ -71,6 +97,26 @@ fn consume_integer() {
         (
             b"-1_00",
             Err(DecodeError::IncorrectDigitGrouping(b"-1_00".to_vec())),
+        ),
+        (
+            b"1_0000",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_0000".to_vec())),
+        ),
+        (
+            b"1_000_",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_000_".to_vec())),
+        ),
+        (
+            b"1_000_0",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_000_0".to_vec())),
+        ),
+        (
+            b"1_000_00",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_000_00".to_vec())),
+        ),
+        (
+            b"1_000_0000",
+            Err(DecodeError::IncorrectDigitGrouping(b"1_000_0000".to_vec())),
         ),
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));

@@ -3,6 +3,7 @@ use jtoo::{Encode, EncodeError, Encoder};
 #[test]
 fn encode_ok() {
     struct Struct;
+    // TODO: Derive Encode.
     impl Encode for Struct {
         fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
             encoder.open_string()?;
