@@ -1,6 +1,18 @@
 use crate::escape_ascii;
 use core::fmt::Debug;
 
+trait AsDecimalDigit {
+    fn to_decimal_digit(&self) -> Option<u8>;
+}
+impl AsDecimalDigit for Option<u8> {
+    fn to_decimal_digit(&self) -> Option<u8> {
+        match self {
+            Some(b) if (b'0'..=b'9').contains(b) => Some(*b - b'0'),
+            _ => None,
+        }
+    }
+}
+
 trait ByteIterExt: Iterator<Item = u8> {
     fn next_decimal_digit(&mut self) -> Option<u8>;
 }
@@ -25,27 +37,32 @@ where
     }
 }
 
+// TODO: Turn this into struct DecodeError(Reason,usize, &[u8])
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
     DataNotConsumed(Vec<u8>),
     ExpectedBool(Vec<u8>),
+    ExpectedDate(Vec<u8>),
     ExpectedInteger(Vec<u8>),
     ExpectedListEnd(Vec<u8>),
     ExpectedListSeparator(Vec<u8>),
+    ExpectedMonth(Vec<u8>),
     ExpectedNoMoreData(Vec<u8>),
     ExpectedString(Vec<u8>),
-    ExpectedYear(Vec<u8>),
+    ExpectedWeek(Vec<u8>),
     ExtraLeadingZeroes(Vec<u8>),
     IncompleteEscape(Vec<u8>),
     IncorrectDigitGrouping(Vec<u8>),
     IntegerTooLarge(Vec<u8>),
     InvalidEscape(Vec<u8>),
     ListEndNotConsumed(Vec<u8>),
-    MalformedYear(Vec<u8>),
+    MalformedDate(Vec<u8>),
+    MonthOutOfRange(Vec<u8>),
     NegativeZero(Vec<u8>),
     NotInList(Vec<u8>),
     NotUtf8(Vec<u8>),
     UnclosedString(Vec<u8>),
+    WeekOutOfRange(Vec<u8>),
     YearOutOfRange(Vec<u8>),
 }
 impl Debug for DecodeError {
@@ -53,12 +70,14 @@ impl Debug for DecodeError {
         let (prefix, b) = match self {
             DecodeError::DataNotConsumed(b) => ("DecodeError: program error: data not consumed", b),
             DecodeError::ExpectedBool(b) => ("DecodeError: expected bool, got", b),
+            DecodeError::ExpectedDate(b) => ("DecodeError: expected date, got", b),
             DecodeError::ExpectedInteger(b) => ("DecodeError: expected integer, got", b),
             DecodeError::ExpectedListEnd(b) => ("DecodeError: expected list end, got", b),
             DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
+            DecodeError::ExpectedMonth(b) => ("DecodeError: expected month, got", b),
             DecodeError::ExpectedNoMoreData(b) => ("DecodeError: expected no more data, got", b),
             DecodeError::ExpectedString(b) => ("DecodeError: expected string, got", b),
-            DecodeError::ExpectedYear(b) => ("DecodeError: expected year, got", b),
+            DecodeError::ExpectedWeek(b) => ("DecodeError: expected week, got", b),
             DecodeError::ExtraLeadingZeroes(b) => ("DecodeError: expected single zero, got", b),
             DecodeError::IncompleteEscape(b) => ("DecodeError: incomplete escape sequence", b),
             DecodeError::IncorrectDigitGrouping(b) => ("DecodeError: incorrect digit grouping", b),
@@ -67,11 +86,13 @@ impl Debug for DecodeError {
             DecodeError::ListEndNotConsumed(b) => {
                 ("DecodeError: program error: list end not consumed, at", b)
             }
-            DecodeError::MalformedYear(b) => ("DecodeError: got malformed year", b),
+            DecodeError::MalformedDate(b) => ("DecodeError: got malformed date", b),
+            DecodeError::MonthOutOfRange(b) => ("DecodeError: month out of range", b),
             DecodeError::NegativeZero(b) => ("DecodeError: got negative zero", b),
             DecodeError::NotInList(b) => ("DecodeError: program error: not in list, at", b),
             DecodeError::NotUtf8(b) => ("DecodeError: expected UTF-8, got", b),
             DecodeError::UnclosedString(b) => ("DecodeError: unclosed string, got", b),
+            DecodeError::WeekOutOfRange(b) => ("DecodeError: week out of range", b),
             DecodeError::YearOutOfRange(b) => ("DecodeError: year out of range", b),
         };
         write!(f, "{prefix}: '{}'", escape_ascii(b))
@@ -91,17 +112,78 @@ pub trait Decode {
     }
 }
 
+#[derive(Debug)]
+pub struct Date {
+    pub year: Option<u16>,
+    pub month: Option<u8>,
+    pub week: Option<u8>,
+    pub day: Option<u8>,
+}
+
+#[derive(Debug)]
+pub enum Second {
+    Integer(u8),
+    Milli(u32),
+    Micro(u32),
+    Nano(u64),
+}
+
+#[derive(Debug)]
+pub struct Time {
+    pub hour: Option<u8>,
+    pub minute: Option<u8>,
+    pub second: Second,
+}
+
+#[derive(Debug)]
+pub struct TzOffset {
+    pub hours: i8,
+    pub minutes: u8, // Only one country has used a -00xx timezone, Liberia.  They stopped in 1972.
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Elem {
+    None,
+    Year,
+    MonthOrWeek,
+    Day,
+    Hour,
+    Minute,
+    Second,
+}
+
+#[derive(Debug)]
 pub struct Decoder<'a> {
     bytes: &'a [u8],
-    list_depth: usize,
+    debug_bytes: &'a [u8],
     consumed_list_element: bool,
+    list_depth: usize,
+    previous: Elem,
 }
 impl<'a> Decoder<'a> {
     pub fn new(bytes: &'a [u8]) -> Self {
         Self {
             bytes,
-            list_depth: 0,
+            debug_bytes: bytes,
             consumed_list_element: false,
+            list_depth: 0,
+            previous: Elem::None,
+        }
+    }
+
+    pub fn expect_previous(&self, expected: Elem) -> Result<(), DecodeError> {
+        if self.previous == expected {
+            Ok(())
+        } else {
+            Err(match expected {
+                Elem::None => DecodeError::DataNotConsumed(self.debug_vec()),
+                Elem::Year
+                | Elem::MonthOrWeek
+                | Elem::Day
+                | Elem::Hour
+                | Elem::Minute
+                | Elem::Second => DecodeError::MalformedDate(self.debug_vec()),
+            })
         }
     }
 
@@ -116,18 +198,28 @@ impl<'a> Decoder<'a> {
     }
 
     fn debug_vec(&self) -> Vec<u8> {
-        Vec::from_iter(self.bytes.iter().take(30).copied())
+        Vec::from_iter(self.debug_bytes.iter().take(30).copied())
     }
 
     pub fn consume_bool(&mut self) -> Result<bool, DecodeError> {
-        let value = match self.bytes.first() {
+        self.expect_previous(Elem::None)?;
+        let value = match self.consume_byte() {
             Some(b'T') => true,
             Some(b'F') => false,
             _ => return Err(DecodeError::ExpectedBool(self.debug_vec())),
         };
-        self.consume_bytes(1);
-        self.consume_list_separator()?;
+        self.close_item()?;
         Ok(value)
+    }
+
+    fn consume_byte(&mut self) -> Option<u8> {
+        match self.bytes.get(0).copied() {
+            Some(b) => {
+                self.bytes = &self.bytes[1..];
+                Some(b)
+            }
+            None => None,
+        }
     }
 
     fn consume_bytes(&mut self, n: usize) {
@@ -144,13 +236,18 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
-        let mut sign = 1i64;
+        self.expect_previous(Elem::None)?;
+        let mut sign = if self.consume_exact(b'-').is_some() {
+            -1
+        } else {
+            1
+        };
         let mut len = 0;
         let mut seen_underscore = false;
         let mut group_digit_count = 0u16;
         let mut value = 0i64;
-        for b in self.bytes {
-            match *b {
+        while let Some(b) = self.consume_byte() {
+            match b {
                 b'-' => {
                     if len == 0 {
                         sign = -1;
@@ -200,54 +297,111 @@ impl<'a> Decoder<'a> {
         if sign == -1 && value == 0 {
             return Err(DecodeError::NegativeZero(self.debug_vec()));
         }
-        self.consume_bytes(len);
-        self.consume_list_separator()?;
+        self.close_item()?;
         Ok(value)
     }
 
     pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
+        self.expect_previous(Elem::None)?;
         self.consume_exact(b'[')
             .ok_or_else(|| DecodeError::ExpectedString(self.debug_vec()))?;
         self.list_depth += 1;
         Ok(())
     }
 
-    pub fn consume_list_separator(&mut self) -> Result<(), DecodeError> {
-        if self.list_depth == 0 {
+    pub fn close_item(&mut self) -> Result<(), DecodeError> {
+        let result = if self.list_depth == 0 {
             Ok(())
         } else {
             self.consumed_list_element = true;
             match self.bytes.first() {
                 Some(&b',') => {
-                    self.consume_bytes(1);
+                    self.consume_byte();
                     Ok(())
                 }
                 Some(&b']') => Ok(()),
                 None => Ok(()), // Next call will try to consume list close and fail.
                 _ => Err(DecodeError::ExpectedListSeparator(self.debug_vec())),
             }
+        };
+        self.debug_bytes = self.bytes;
+        result
+    }
+
+    pub fn maybe_end_date(&mut self) -> Result<(), DecodeError> {
+        match (self.previous, self.bytes.get(0).copied()) {
+            (_, None) => Ok(()),
+            (_, Some(b']') | Some(b',')) => {
+                self.previous = Elem::None;
+                self.close_item()
+            }
+            (Elem::Year | Elem::MonthOrWeek, Some(b'-') | Some(b'~') | Some(b'+') | Some(b'Z'))
+            | (Elem::Day, Some(b'T') | Some(b'~') | Some(b'+') | Some(b'Z'))
+            | (Elem::Hour | Elem::Minute, Some(b':') | Some(b'~') | Some(b'+') | Some(b'Z'))
+            | (Elem::Second, Some(b'~') | Some(b'+') | Some(b'Z')) => Ok(()),
+            _ => Err(DecodeError::MalformedDate(self.debug_vec())),
         }
     }
 
+    pub fn consume_date_digit(&mut self) -> Result<u8, DecodeError> {
+        match self.consume_byte() {
+            Some(b) if (b'0'..=b'9').contains(&b) => Ok(b - b'0'),
+            _ => Err(DecodeError::MalformedDate(self.debug_vec())),
+        }
+    }
+
+    pub fn has_more(&self) -> bool {
+        self.previous != Elem::None
+    }
+
     pub fn consume_year(&mut self) -> Result<u16, DecodeError> {
-        let mut bytes = self.bytes.iter().copied();
-        if bytes.next() != Some(b'D') {
-            return Err(DecodeError::ExpectedYear(self.debug_vec()));
+        self.expect_previous(Elem::None)?;
+        if self.consume_byte() != Some(b'D') {
+            return Err(DecodeError::ExpectedDate(self.debug_vec()));
         }
-        let mut value = 0;
-        for _ in 0..4 {
-            let d = bytes
-                .next_decimal_digit()
-                .ok_or_else(|| DecodeError::MalformedYear(self.debug_vec()))?;
-            value *= 10;
-            value += u16::from(d);
-        }
-        if value == 0 {
+        let d0 = u16::from(self.consume_date_digit()?);
+        let d1 = u16::from(self.consume_date_digit()?);
+        let d2 = u16::from(self.consume_date_digit()?);
+        let d3 = u16::from(self.consume_date_digit()?);
+        let year = 1000 * d0 + 100 * d1 + 10 * d2 + d3;
+        if !(1..=9999).contains(&year) {
             return Err(DecodeError::YearOutOfRange(self.debug_vec()));
         }
-        self.consume_bytes(5);
-        self.consume_list_separator()?;
-        Ok(value)
+        self.previous = Elem::Year;
+        self.maybe_end_date()?;
+        Ok(year)
+    }
+
+    pub fn consume_month(&mut self) -> Result<u8, DecodeError> {
+        self.expect_previous(Elem::Year)?;
+        if self.consume_byte() != Some(b'-') {
+            return Err(DecodeError::ExpectedMonth(self.debug_vec()));
+        }
+        let d0 = u8::from(self.consume_date_digit()?);
+        let d1 = u8::from(self.consume_date_digit()?);
+        let month = 10 * d0 + d1;
+        if !(1..=12).contains(&month) {
+            return Err(DecodeError::MonthOutOfRange(self.debug_vec()));
+        }
+        self.previous = Elem::MonthOrWeek;
+        self.maybe_end_date()?;
+        Ok(month)
+    }
+
+    pub fn consume_week(&mut self) -> Result<u8, DecodeError> {
+        self.expect_previous(Elem::Year)?;
+        if (self.consume_byte(), self.consume_byte()) != (Some(b'-'), Some(b'W')) {
+            return Err(DecodeError::ExpectedWeek(self.debug_vec()));
+        }
+        let d0 = u8::from(self.consume_date_digit()?);
+        let d1 = u8::from(self.consume_date_digit()?);
+        let week = 10 * d0 + d1;
+        if !(1..=53).contains(&week) {
+            return Err(DecodeError::WeekOutOfRange(self.debug_vec()));
+        }
+        self.previous = Elem::MonthOrWeek;
+        self.maybe_end_date()?;
+        Ok(week)
     }
 
     pub fn has_another_list_item(&mut self) -> bool {
@@ -264,7 +418,7 @@ impl<'a> Decoder<'a> {
         self.consume_exact(b']')
             .ok_or_else(|| DecodeError::ExpectedListEnd(self.debug_vec()))?;
         self.consumed_list_element = false;
-        self.consume_list_separator()?;
+        self.close_item()?;
         self.list_depth -= 1;
         Ok(())
     }
@@ -320,7 +474,7 @@ impl<'a> Decoder<'a> {
             }
         }
         self.consume_bytes(len + 1);
-        self.consume_list_separator()?;
+        self.close_item()?;
         Ok(value)
     }
 }

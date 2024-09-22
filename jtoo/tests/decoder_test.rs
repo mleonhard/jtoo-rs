@@ -171,12 +171,12 @@ fn consume_string() {
 #[test]
 fn consume_year() {
     for (bytes, expected) in [
-        (b"".as_slice(), Err(DecodeError::ExpectedYear(vec![]))),
-        (b"T", Err(DecodeError::ExpectedYear(b"T".to_vec()))),
-        (b"!", Err(DecodeError::ExpectedYear(b"!".to_vec()))),
-        (b"D0", Err(DecodeError::MalformedYear(b"D0".to_vec()))),
-        (b"D00", Err(DecodeError::MalformedYear(b"D00".to_vec()))),
-        (b"D000", Err(DecodeError::MalformedYear(b"D000".to_vec()))),
+        (b"".as_slice(), Err(DecodeError::ExpectedDate(vec![]))),
+        (b"T", Err(DecodeError::ExpectedDate(b"T".to_vec()))),
+        (b"!", Err(DecodeError::ExpectedDate(b"!".to_vec()))),
+        (b"D0", Err(DecodeError::MalformedDate(b"D0".to_vec()))),
+        (b"D00", Err(DecodeError::MalformedDate(b"D00".to_vec()))),
+        (b"D000", Err(DecodeError::MalformedDate(b"D000".to_vec()))),
         (
             b"D0000",
             Err(DecodeError::YearOutOfRange(b"D0000".to_vec())),
@@ -184,7 +184,19 @@ fn consume_year() {
         (b"D0001", Ok(1u16)),
         (b"D2024", Ok(2024)),
         (b"D9999", Ok(9999)),
-        (b"D999a", Err(DecodeError::MalformedYear(b"D999a".to_vec()))),
+        (b"D999a", Err(DecodeError::MalformedDate(b"D999a".to_vec()))),
+        (
+            b"D10000",
+            Err(DecodeError::MalformedDate(b"D10000".to_vec())),
+        ),
+        (
+            b"D1000T",
+            Err(DecodeError::MalformedDate(b"D1000T".to_vec())),
+        ),
+        (
+            b"D2024!",
+            Err(DecodeError::MalformedDate(b"D2024!".to_vec())),
+        ),
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
@@ -193,12 +205,114 @@ fn consume_year() {
             decoder.close().expect(&msg);
         }
     }
-    let mut decoder = Decoder::new(b"D10000");
-    decoder.consume_year().unwrap();
-    assert_eq!(
-        decoder.close(),
-        Err(DecodeError::DataNotConsumed(b"0".to_vec()))
-    );
+}
+
+#[test]
+fn consume_month() {
+    for (bytes, expected) in [
+        (
+            b"D2024".as_slice(),
+            Err(DecodeError::ExpectedMonth(b"D2024".to_vec())),
+        ),
+        (
+            b"D2024Z",
+            Err(DecodeError::ExpectedMonth(b"D2024Z".to_vec())),
+        ),
+        (
+            b"D2024-",
+            Err(DecodeError::MalformedDate(b"D2024-".to_vec())),
+        ),
+        (
+            b"D2024-0",
+            Err(DecodeError::MalformedDate(b"D2024-0".to_vec())),
+        ),
+        (
+            b"D2024-1",
+            Err(DecodeError::MalformedDate(b"D2024-1".to_vec())),
+        ),
+        (
+            b"D2024-1n",
+            Err(DecodeError::MalformedDate(b"D2024-1n".to_vec())),
+        ),
+        (
+            b"D2024-12n",
+            Err(DecodeError::MalformedDate(b"D2024-12n".to_vec())),
+        ),
+        (
+            b"D2024-00",
+            Err(DecodeError::MonthOutOfRange(b"D2024-00".to_vec())),
+        ),
+        (b"D2024-01", Ok(1u8)),
+        (b"D2024-12", Ok(12u8)),
+        (
+            b"D2024-13",
+            Err(DecodeError::MonthOutOfRange(b"D2024-13".to_vec())),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        decoder.consume_year().unwrap();
+        assert_eq!(decoder.consume_month(), expected, "{}", msg);
+        if expected.is_ok() {
+            decoder.close().expect(&msg);
+        }
+    }
+}
+
+#[test]
+fn consume_week() {
+    for (bytes, expected) in [
+        (
+            b"D2024".as_slice(),
+            Err(DecodeError::ExpectedWeek(b"D2024".to_vec())),
+        ),
+        (
+            b"D2024Z",
+            Err(DecodeError::ExpectedWeek(b"D2024Z".to_vec())),
+        ),
+        (
+            b"D2024-",
+            Err(DecodeError::ExpectedWeek(b"D2024-".to_vec())),
+        ),
+        (
+            b"D2024-W",
+            Err(DecodeError::MalformedDate(b"D2024-W".to_vec())),
+        ),
+        (
+            b"D2024-W0",
+            Err(DecodeError::MalformedDate(b"D2024-W0".to_vec())),
+        ),
+        (
+            b"D2024-W1",
+            Err(DecodeError::MalformedDate(b"D2024-W1".to_vec())),
+        ),
+        (
+            b"D2024-W1n",
+            Err(DecodeError::MalformedDate(b"D2024-W1n".to_vec())),
+        ),
+        (
+            b"D2024-W12n",
+            Err(DecodeError::MalformedDate(b"D2024-W12n".to_vec())),
+        ),
+        (
+            b"D2024-W00",
+            Err(DecodeError::WeekOutOfRange(b"D2024-W00".to_vec())),
+        ),
+        (b"D2024-W01", Ok(1u8)),
+        (b"D2024-W53", Ok(53u8)),
+        (
+            b"D2024-W54",
+            Err(DecodeError::WeekOutOfRange(b"D2024-W54".to_vec())),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        decoder.consume_year().unwrap();
+        assert_eq!(decoder.consume_week(), expected, "{}", msg);
+        if expected.is_ok() {
+            decoder.close().expect(&msg);
+        }
+    }
 }
 
 #[test]
@@ -207,7 +321,7 @@ fn list_missing_separator() {
     decoder.consume_open_list().unwrap();
     assert_eq!(
         decoder.consume_bool(),
-        Err(DecodeError::ExpectedListSeparator(b"T]".to_vec()))
+        Err(DecodeError::ExpectedListSeparator(b"[TT]".to_vec()))
     );
 }
 
@@ -218,7 +332,7 @@ fn list_list_missing_separator() {
     decoder.consume_open_list().unwrap();
     assert_eq!(
         decoder.consume_close_list(),
-        Err(DecodeError::ExpectedListSeparator(b"[]]".to_vec()))
+        Err(DecodeError::ExpectedListSeparator(b"[[][]]".to_vec()))
     );
 }
 
