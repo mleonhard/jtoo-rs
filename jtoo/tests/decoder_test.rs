@@ -231,12 +231,12 @@ fn consume_month() {
             Err(DecodeError::MalformedDate(b"D2024-1".to_vec())),
         ),
         (
-            b"D2024-1n",
-            Err(DecodeError::MalformedDate(b"D2024-1n".to_vec())),
+            b"D2024-1x",
+            Err(DecodeError::MalformedDate(b"D2024-1x".to_vec())),
         ),
         (
-            b"D2024-12n",
-            Err(DecodeError::MalformedDate(b"D2024-12n".to_vec())),
+            b"D2024-12x",
+            Err(DecodeError::MalformedDate(b"D2024-12x".to_vec())),
         ),
         (
             b"D2024-00",
@@ -272,7 +272,7 @@ fn consume_week() {
         ),
         (
             b"D2024-",
-            Err(DecodeError::ExpectedWeek(b"D2024-".to_vec())),
+            Err(DecodeError::MalformedDate(b"D2024-".to_vec())),
         ),
         (
             b"D2024-W",
@@ -287,12 +287,12 @@ fn consume_week() {
             Err(DecodeError::MalformedDate(b"D2024-W1".to_vec())),
         ),
         (
-            b"D2024-W1n",
-            Err(DecodeError::MalformedDate(b"D2024-W1n".to_vec())),
+            b"D2024-W1x",
+            Err(DecodeError::MalformedDate(b"D2024-W1x".to_vec())),
         ),
         (
-            b"D2024-W12n",
-            Err(DecodeError::MalformedDate(b"D2024-W12n".to_vec())),
+            b"D2024-W12x",
+            Err(DecodeError::MalformedDate(b"D2024-W12x".to_vec())),
         ),
         (
             b"D2024-W00",
@@ -309,6 +309,77 @@ fn consume_week() {
         let mut decoder = Decoder::new(bytes);
         decoder.consume_year().unwrap();
         assert_eq!(decoder.consume_week(), expected, "{}", msg);
+        if expected.is_ok() {
+            decoder.close().expect(&msg);
+        }
+    }
+}
+
+#[test]
+fn consume_day() {
+    for (bytes, expected) in [
+        (
+            b"D2024-01".as_slice(),
+            Err(DecodeError::ExpectedDay(b"D2024-01".to_vec())),
+        ),
+        (
+            b"D2024-01Z",
+            Err(DecodeError::ExpectedDay(b"D2024-01Z".to_vec())),
+        ),
+        (
+            b"D2024-W01Z",
+            Err(DecodeError::ExpectedDay(b"D2024-W01Z".to_vec())),
+        ),
+        (
+            b"D2024-01-",
+            Err(DecodeError::MalformedDate(b"D2024-01-".to_vec())),
+        ),
+        (
+            b"D2024-W01-",
+            Err(DecodeError::MalformedDate(b"D2024-W01-".to_vec())),
+        ),
+        (
+            b"D2024-01-x",
+            Err(DecodeError::MalformedDate(b"D2024-01-x".to_vec())),
+        ),
+        (
+            b"D2024-01-0",
+            Err(DecodeError::MalformedDate(b"D2024-01-0".to_vec())),
+        ),
+        (
+            b"D2024-01-1",
+            Err(DecodeError::MalformedDate(b"D2024-01-1".to_vec())),
+        ),
+        (
+            b"D2024-01-1x",
+            Err(DecodeError::MalformedDate(b"D2024-01-1x".to_vec())),
+        ),
+        (
+            b"D2024-01-12x",
+            Err(DecodeError::MalformedDate(b"D2024-01-12x".to_vec())),
+        ),
+        (
+            b"D2024-01-00",
+            Err(DecodeError::DayOutOfRange(b"D2024-01-00".to_vec())),
+        ),
+        (b"D2024-01-01", Ok(1u8)),
+        (b"D2024-W01-01", Ok(1u8)),
+        (b"D2024-01-31", Ok(31u8)),
+        (b"D2024-W01-31", Ok(31u8)),
+        (
+            b"D2024-01-32",
+            Err(DecodeError::DayOutOfRange(b"D2024-01-32".to_vec())),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        decoder.consume_year().unwrap();
+        if bytes.contains(&b'W') {
+            decoder.consume_week().unwrap();
+        } else {
+            decoder.consume_month().unwrap();
+        }
+        assert_eq!(decoder.consume_day(), expected, "{}", msg);
         if expected.is_ok() {
             decoder.close().expect(&msg);
         }

@@ -41,8 +41,10 @@ where
 #[derive(Eq, PartialEq)]
 pub enum DecodeError {
     DataNotConsumed(Vec<u8>),
+    DayOutOfRange(Vec<u8>),
     ExpectedBool(Vec<u8>),
     ExpectedDate(Vec<u8>),
+    ExpectedDay(Vec<u8>),
     ExpectedInteger(Vec<u8>),
     ExpectedListEnd(Vec<u8>),
     ExpectedListSeparator(Vec<u8>),
@@ -69,8 +71,10 @@ impl Debug for DecodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
         let (prefix, b) = match self {
             DecodeError::DataNotConsumed(b) => ("DecodeError: program error: data not consumed", b),
+            DecodeError::DayOutOfRange(b) => ("DecodeError: day out of range", b),
             DecodeError::ExpectedBool(b) => ("DecodeError: expected bool, got", b),
             DecodeError::ExpectedDate(b) => ("DecodeError: expected date, got", b),
+            DecodeError::ExpectedDay(b) => ("DecodeError: expected day, got", b),
             DecodeError::ExpectedInteger(b) => ("DecodeError: expected integer, got", b),
             DecodeError::ExpectedListEnd(b) => ("DecodeError: expected list end, got", b),
             DecodeError::ExpectedListSeparator(b) => ("DecodeError: expected comma, got", b),
@@ -390,8 +394,15 @@ impl<'a> Decoder<'a> {
 
     pub fn consume_week(&mut self) -> Result<u8, DecodeError> {
         self.expect_previous(Elem::Year)?;
-        if (self.consume_byte(), self.consume_byte()) != (Some(b'-'), Some(b'W')) {
+        if self.consume_byte() != Some(b'-') {
             return Err(DecodeError::ExpectedWeek(self.debug_vec()));
+        }
+        match self.consume_byte() {
+            Some(b'W') => {}
+            Some(b) if (b'0'..=b'9').contains(&b) => {
+                return Err(DecodeError::ExpectedWeek(self.debug_vec()))
+            }
+            _ => return Err(DecodeError::MalformedDate(self.debug_vec())),
         }
         let d0 = u8::from(self.consume_date_digit()?);
         let d1 = u8::from(self.consume_date_digit()?);
@@ -402,6 +413,22 @@ impl<'a> Decoder<'a> {
         self.previous = Elem::MonthOrWeek;
         self.maybe_end_date()?;
         Ok(week)
+    }
+
+    pub fn consume_day(&mut self) -> Result<u8, DecodeError> {
+        self.expect_previous(Elem::MonthOrWeek)?;
+        if self.consume_byte() != Some(b'-') {
+            return Err(DecodeError::ExpectedDay(self.debug_vec()));
+        }
+        let d0 = u8::from(self.consume_date_digit()?);
+        let d1 = u8::from(self.consume_date_digit()?);
+        let day = 10 * d0 + d1;
+        if !(1..=31).contains(&day) {
+            return Err(DecodeError::DayOutOfRange(self.debug_vec()));
+        }
+        self.previous = Elem::Day;
+        self.maybe_end_date()?;
+        Ok(day)
     }
 
     pub fn has_another_list_item(&mut self) -> bool {
