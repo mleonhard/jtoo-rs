@@ -1,4 +1,4 @@
-use jtoo::{Decode, DecodeError, Decoder};
+use jtoo::{Decode, DecodeError, Decoder, ErrorReason};
 
 #[test]
 fn decode() {
@@ -14,10 +14,10 @@ fn decode() {
     assert_eq!(Struct::decode(b"\"str1\""), Ok(Struct("str1".to_string())));
     assert_eq!(
         format!("{:?}", Struct::decode(b"T").unwrap_err()),
-        "DecodeError: expected string, got: 'T'".to_string()
+        "DecodeError: ExpectedString: 'T'".to_string()
     );
     assert_eq!(
-        Struct::decode(b"T"),
-        Err(DecodeError::ExpectedString(b"T".to_vec()))
+        Struct::decode(b"T").unwrap_err().reason,
+        ErrorReason::ExpectedString
     );
 }
