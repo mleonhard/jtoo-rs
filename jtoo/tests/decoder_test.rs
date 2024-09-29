@@ -142,12 +142,14 @@ fn consume_string() {
 #[test]
 fn consume_year() {
     for (bytes, expected) in [
-        (b"".as_slice(), Err(ErrorReason::ExpectedDateOrTime)),
-        (b"T", Err(ErrorReason::MalformedTime)),
-        (b"!", Err(ErrorReason::ExpectedDateOrTime)),
+        (b"".as_slice(), Err(ErrorReason::ExpectedYear)),
+        (b"T", Err(ErrorReason::ExpectedYear)),
+        (b"!", Err(ErrorReason::ExpectedYear)),
         (b"D0", Err(ErrorReason::MalformedDate)),
         (b"D00", Err(ErrorReason::MalformedDate)),
         (b"D000", Err(ErrorReason::MalformedDate)),
+        (b"D2029Z", Err(ErrorReason::ExpectedYear)),
+        (b"D2029-08", Err(ErrorReason::ExpectedYear)),
         (b"D0000", Err(ErrorReason::YearOutOfRange)),
         (b"D0001", Ok(Year { y: 1u16 })),
         (b"D2029", Ok(Year { y: 2029 })),
@@ -156,6 +158,7 @@ fn consume_year() {
         (b"D10000", Err(ErrorReason::MalformedDate)),
         (b"D1000T", Err(ErrorReason::MalformedDate)),
         (b"D2029!", Err(ErrorReason::MalformedDate)),
+        (b"D2029-01", Err(ErrorReason::ExpectedYear)),
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
@@ -176,7 +179,7 @@ fn consume_year() {
 #[test]
 fn consume_year_tz_offset() {
     for (bytes, expected) in [
-        (b"D2029".as_slice(), Err(ErrorReason::ExpectedYearTzOffset)),
+        (b"D2029".as_slice(), Err(ErrorReason::ExpectedTzOffset)),
         (b"D2029-01", Err(ErrorReason::ExpectedYearTzOffset)),
         // Hour part
         (b"D2029!", Err(ErrorReason::MalformedDate)),
@@ -286,17 +289,20 @@ fn consume_year_tz_offset() {
 #[test]
 fn consume_year_month() {
     for (bytes, expected) in [
-        (b"D2029".as_slice(), Err(ErrorReason::ExpectedYearMonth)),
-        (b"D2029Z", Err(ErrorReason::ExpectedYearMonth)),
-        (b"D2029-W01", Err(ErrorReason::ExpectedYearMonth)),
+        (b"D2029".as_slice(), Err(ErrorReason::ExpectedMonth)),
+        (b"D2029Z", Err(ErrorReason::ExpectedMonth)),
+        (b"D2029-W08", Err(ErrorReason::ExpectedMonth)),
         (b"D2029-", Err(ErrorReason::MalformedDate)),
         (b"D2029-0", Err(ErrorReason::MalformedDate)),
         (b"D2029-0x", Err(ErrorReason::MalformedDate)),
-        (b"D2029-01x", Err(ErrorReason::MalformedDate)),
+        (b"D2029-08x", Err(ErrorReason::MalformedDate)),
+        (b"D2029-08Z", Err(ErrorReason::ExpectedYearMonth)),
+        (b"D2029-08-01", Err(ErrorReason::ExpectedYearMonth)),
         (b"D2029-00", Err(ErrorReason::MonthOutOfRange)),
         (b"D2029-01", Ok(YearMonth { y: 2029, mo: 1 })),
         (b"D2029-12", Ok(YearMonth { y: 2029, mo: 12 })),
         (b"D2029-13", Err(ErrorReason::MonthOutOfRange)),
+        (b"D2029-08-01", Err(ErrorReason::ExpectedYearMonth)),
     ] {
         let msg = format!("bytes=b\"{}\" expected={expected:?}", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
@@ -317,11 +323,16 @@ fn consume_year_month() {
 #[test]
 fn consume_year_month_tz_offset() {
     for (bytes, expected) in [
+        (b"D2029-08".as_slice(), Err(ErrorReason::ExpectedTzOffset)),
         (
-            b"D2029-08".as_slice(),
+            b"D2029-08-01".as_slice(),
             Err(ErrorReason::ExpectedYearMonthTzOffset),
         ),
-        (b"D2029-W08", Err(ErrorReason::ExpectedYearMonthTzOffset)),
+        (
+            b"D2029-08-01Z".as_slice(),
+            Err(ErrorReason::ExpectedYearMonthTzOffset),
+        ),
+        (b"D2029-W08", Err(ErrorReason::ExpectedMonth)),
         (b"D2029-08-07", Err(ErrorReason::ExpectedYearMonthTzOffset)),
         (b"D2029-08+", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D2029-08+x", Err(ErrorReason::MalformedTimeZoneOffset)),
@@ -380,14 +391,16 @@ fn consume_year_month_tz_offset() {
 #[test]
 fn consume_year_week() {
     for (bytes, expected) in [
-        (b"D2029".as_slice(), Err(ErrorReason::ExpectedYearWeek)),
-        (b"D2029Z", Err(ErrorReason::ExpectedYearWeek)),
-        (b"D2029-01", Err(ErrorReason::ExpectedYearWeek)),
+        (b"D2029".as_slice(), Err(ErrorReason::ExpectedWeek)),
+        (b"D2029Z", Err(ErrorReason::ExpectedWeek)),
+        (b"D2029-01", Err(ErrorReason::ExpectedWeek)),
         (b"D2029-", Err(ErrorReason::MalformedDate)),
         (b"D2029-W", Err(ErrorReason::MalformedDate)),
         (b"D2029-W0", Err(ErrorReason::MalformedDate)),
         (b"D2029-W0x", Err(ErrorReason::MalformedDate)),
         (b"D2029-W01x", Err(ErrorReason::MalformedDate)),
+        (b"D2029-W08-01", Err(ErrorReason::ExpectedYearWeek)),
+        (b"D2029-W08Z", Err(ErrorReason::ExpectedYearWeek)),
         (b"D2029-W00", Err(ErrorReason::WeekOutOfRange)),
         (b"D2029-W01", Ok(YearWeek { y: 2029, w: 1 })),
         (b"D2029-W53", Ok(YearWeek { y: 2029, w: 53 })),
@@ -412,12 +425,10 @@ fn consume_year_week() {
 #[test]
 fn consume_year_week_tz_offset() {
     for (bytes, expected) in [
-        (
-            b"D2029-W08".as_slice(),
-            Err(ErrorReason::ExpectedYearWeekTzOffset),
-        ),
-        (b"D2029-08", Err(ErrorReason::ExpectedYearWeekTzOffset)),
-        (b"D2029-W08-07", Err(ErrorReason::ExpectedYearWeekTzOffset)),
+        (b"D2029-W08".as_slice(), Err(ErrorReason::ExpectedTzOffset)),
+        (b"D2029-08", Err(ErrorReason::ExpectedWeek)),
+        (b"D2029-W08-01", Err(ErrorReason::ExpectedYearWeekTzOffset)),
+        (b"D2029-W08-01Z", Err(ErrorReason::ExpectedYearWeekTzOffset)),
         (b"D2029-W08+", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D2029-W08+x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D2029-W08+0", Err(ErrorReason::MalformedTimeZoneOffset)),
@@ -479,18 +490,15 @@ fn consume_year_week_tz_offset() {
 #[test]
 fn consume_year_month_day() {
     for (bytes, expected) in [
-        (
-            b"D2029-08".as_slice(),
-            Err(ErrorReason::ExpectedYearMonthDay),
-        ),
-        (b"D2029-08Z", Err(ErrorReason::ExpectedYearMonthDay)),
-        (b"D2029-W08-01", Err(ErrorReason::ExpectedYearMonthDay)),
+        (b"D2029-08".as_slice(), Err(ErrorReason::ExpectedDay)),
+        (b"D2029-08-09Z", Err(ErrorReason::ExpectedYearMonthDay)),
+        (b"D2029-W08-01", Err(ErrorReason::ExpectedMonth)),
+        (b"D2029-08-09T00", Err(ErrorReason::ExpectedYearMonthDay)),
         (b"D2029-08-", Err(ErrorReason::MalformedDate)),
-        (b"D2029-W08-", Err(ErrorReason::MalformedDate)),
         (b"D2029-08-x", Err(ErrorReason::MalformedDate)),
         (b"D2029-08-0", Err(ErrorReason::MalformedDate)),
         (b"D2029-08-0x", Err(ErrorReason::MalformedDate)),
-        (b"D2029-08-01x", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D2029-08-01x", Err(ErrorReason::MalformedDate)),
         (b"D2029-08-00", Err(ErrorReason::DayOutOfRange)),
         (
             b"D2029-08-01",
@@ -529,17 +537,15 @@ fn consume_year_month_day() {
 #[test]
 fn consume_year_week_day() {
     for (bytes, expected) in [
-        (
-            b"D2029-08".as_slice(),
-            Err(ErrorReason::ExpectedYearWeekDay),
-        ),
-        (b"D2029-W08Z", Err(ErrorReason::ExpectedYearWeekDay)),
-        (b"D2029-08-01", Err(ErrorReason::ExpectedYearWeekDay)),
+        (b"D2029-08".as_slice(), Err(ErrorReason::ExpectedWeek)),
+        (b"D2029-W08", Err(ErrorReason::ExpectedDay)),
+        (b"D2029-W08-01Z", Err(ErrorReason::ExpectedYearWeekDay)),
+        (b"D2029-08-01", Err(ErrorReason::ExpectedWeek)),
         (b"D2029-W08-", Err(ErrorReason::MalformedDate)),
         (b"D2029-W08-x", Err(ErrorReason::MalformedDate)),
         (b"D2029-W08-0", Err(ErrorReason::MalformedDate)),
         (b"D2029-W08-0x", Err(ErrorReason::MalformedDate)),
-        (b"D2029-W08-01x", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D2029-W08-01x", Err(ErrorReason::MalformedDate)),
         (b"D2029-W08-00", Err(ErrorReason::DayOutOfRange)),
         (
             b"D2029-W08-01",
@@ -576,13 +582,18 @@ fn consume_year_week_day() {
 }
 
 #[test]
-fn consume_year_month_hour() {
+fn consume_year_month_day_hour() {
     for (bytes, expected) in [
+        (b"D2029-08-07".as_slice(), Err(ErrorReason::ExpectedHour)),
+        (b"D2029-W08-07T06", Err(ErrorReason::ExpectedMonth)),
         (
-            b"D2029-08-07".as_slice(),
+            b"D2029-08-07T06Z",
             Err(ErrorReason::ExpectedYearMonthDayHour),
         ),
-        (b"D2029-W08-07Z", Err(ErrorReason::ExpectedYearMonthDayHour)),
+        (
+            b"D2029-08-07T06:05",
+            Err(ErrorReason::ExpectedYearMonthDayHour),
+        ),
         (b"D2029-08-07T", Err(ErrorReason::MalformedTime)),
         (b"D2029-08-07Tx", Err(ErrorReason::MalformedTime)),
         (b"D2029-08-07T0", Err(ErrorReason::MalformedTime)),
@@ -627,13 +638,14 @@ fn consume_year_month_hour() {
 }
 
 #[test]
-fn consume_year_week_hour() {
+fn consume_year_week_day_hour() {
     for (bytes, expected) in [
+        (b"D2029-W08-07".as_slice(), Err(ErrorReason::ExpectedHour)),
         (
-            b"D2029-W08-07".as_slice(),
+            b"D2029-W08-07T06Z",
             Err(ErrorReason::ExpectedYearWeekDayHour),
         ),
-        (b"D2029-W08-07Z", Err(ErrorReason::ExpectedYearWeekDayHour)),
+        (b"D2029-08-07T06", Err(ErrorReason::ExpectedWeek)),
         (b"D2029-W08-07T", Err(ErrorReason::MalformedTime)),
         (b"D2029-W08-07Tx", Err(ErrorReason::MalformedTime)),
         (b"D2029-W08-07T0", Err(ErrorReason::MalformedTime)),
@@ -676,14 +688,22 @@ fn consume_year_week_hour() {
 }
 
 #[test]
-fn consume_year_month_hour_minute() {
+fn consume_year_month_day_hour_minute() {
     for (bytes, expected) in [
         (
             b"D2029-08-07T06".as_slice(),
+            Err(ErrorReason::ExpectedMinute),
+        ),
+        (
+            b"D2029-W08-07T06:05".as_slice(),
+            Err(ErrorReason::ExpectedMonth),
+        ),
+        (
+            b"D2029-08-07T06:05Z",
             Err(ErrorReason::ExpectedYearMonthDayHourMinute),
         ),
         (
-            b"D2029-08-07T06Z",
+            b"D2029-08-07T06:05:04",
             Err(ErrorReason::ExpectedYearMonthDayHourMinute),
         ),
         (b"D2029-08-07T06:", Err(ErrorReason::MalformedTime)),
@@ -730,14 +750,19 @@ fn consume_year_month_hour_minute() {
 }
 
 #[test]
-fn consume_year_month_hour_minute_second() {
+fn consume_year_month_day_hour_minute_second() {
     for (bytes, expected) in [
         (
             b"D2029-08-07T06:05".as_slice(),
-            Err(ErrorReason::ExpectedYearMonthDayHourMinuteSecond),
+            Err(ErrorReason::ExpectedSecond),
         ),
         (
-            b"D2029-08-07T06:05Z",
+            b"D2029-08-07T06:05:04Z",
+            Err(ErrorReason::ExpectedYearMonthDayHourMinuteSecond),
+        ),
+        (b"D2029-W08-07T06:05:04", Err(ErrorReason::ExpectedMonth)),
+        (
+            b"D2029-08-07T06:05:04.000",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteSecond),
         ),
         (b"D2029-08-07T06:05:", Err(ErrorReason::MalformedTime)),
@@ -786,14 +811,22 @@ fn consume_year_month_hour_minute_second() {
 }
 
 #[test]
-fn consume_year_month_hour_minute_millisecond() {
+fn consume_year_month_day_hour_minute_millisecond() {
     for (bytes, expected) in [
         (
             b"D2029-08-07T06:05:04".as_slice(),
+            Err(ErrorReason::ExpectedMillisecond),
+        ),
+        (
+            b"D2029-08-07T06:05:04.003Z",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecond),
         ),
         (
-            b"D2029-08-07T06:05:04Z",
+            b"D2029-W08-07T06:05:04.003",
+            Err(ErrorReason::ExpectedMonth),
+        ),
+        (
+            b"D2029-08-07T06:05:04.003_002",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecond),
         ),
         (b"D2029-08-07T06:05:04.", Err(ErrorReason::MalformedTime)),
@@ -876,14 +909,22 @@ fn consume_year_month_hour_minute_millisecond() {
 }
 
 #[test]
-fn consume_year_month_hour_minute_microsecond() {
+fn consume_year_month_day_hour_minute_microsecond() {
     for (bytes, expected) in [
         (
             b"D2029-08-07T06:05:04.333".as_slice(),
+            Err(ErrorReason::ExpectedMicrosecond),
+        ),
+        (
+            b"D2029-08-07T06:05:04.333_222Z",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecond),
         ),
         (
-            b"D2029-08-07T06:05:04.333Z",
+            b"D2029-W08-07T06:05:04.333_222",
+            Err(ErrorReason::ExpectedMonth),
+        ),
+        (
+            b"D2029-08-07T06:05:04.333_222_111",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecond),
         ),
         (
@@ -984,15 +1025,19 @@ fn consume_year_month_hour_minute_microsecond() {
 }
 
 #[test]
-fn consume_year_month_hour_minute_nanosecond() {
+fn consume_year_month_day_hour_minute_nanosecond() {
     for (bytes, expected) in [
         (
             b"D2029-08-07T06:05:04.333_222".as_slice(),
+            Err(ErrorReason::ExpectedNanosecond),
+        ),
+        (
+            b"D2029-08-07T06:05:04.333_222_111Z",
             Err(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecond),
         ),
         (
-            b"D2029-08-07T06:05:04.333_222Z",
-            Err(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecond),
+            b"D2029-W08-07T06:05:04.333_222_111",
+            Err(ErrorReason::ExpectedMonth),
         ),
         (
             b"D2029-08-07T06:05:04.333_222_",
@@ -1020,11 +1065,11 @@ fn consume_year_month_hour_minute_nanosecond() {
         ),
         (
             b"D2029-08-07T06:05:04.333_222_000x",
-            Err(ErrorReason::MalformedTimeZoneOffset),
+            Err(ErrorReason::MalformedTime),
         ),
         (
             b"D2029-08-07T06:05:04.333_222_0000",
-            Err(ErrorReason::MalformedTimeZoneOffset),
+            Err(ErrorReason::MalformedTime),
         ),
         (
             b"D2029-08-07T06:05:00.000_000_000",
@@ -1127,6 +1172,14 @@ fn list_nested() {
     decoder.consume_close_list().unwrap();
     decoder.consume_close_list().unwrap();
     decoder.close().unwrap();
+}
+
+#[test]
+fn list_not_a_list() {
+    assert_eq!(
+        Decoder::new(b"T").consume_open_list().unwrap_err().reason,
+        ErrorReason::ExpectedList
+    );
 }
 
 #[test]

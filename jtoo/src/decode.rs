@@ -8,13 +8,23 @@ pub enum ErrorReason {
     ExpectedBool,
     ExpectedDate,
     ExpectedDateOrTime,
+    ExpectedDay,
+    ExpectedHour,
     ExpectedInteger,
+    ExpectedList,
     ExpectedListEnd,
     ExpectedListSeparator,
-    ExpectedNoMoreData,
+    ExpectedMicrosecond,
+    ExpectedMillisecond,
+    ExpectedMinute,
+    ExpectedMonth,
+    ExpectedNanosecond,
+    ExpectedSecond,
     ExpectedSingleZero,
     ExpectedString,
     ExpectedTime,
+    ExpectedTzOffset,
+    ExpectedWeek,
     ExpectedYear,
     ExpectedYearMonth,
     ExpectedYearMonthDay,
@@ -55,10 +65,17 @@ pub enum ErrorReason {
     IntegerTooLarge,
     InvalidEscapeSequence,
     ListEndNotConsumed,
+    MalformedBool,
     MalformedDate,
     MalformedDateTimeTzOffset,
+    MalformedInteger,
+    MalformedListEnd,
+    MalformedMonth,
+    MalformedString,
     MalformedTime,
     MalformedTimeZoneOffset,
+    MalformedWeek,
+    MalformedYear,
     MicrosecondOutOfRange,
     MillisecondOutOfRange,
     MinuteOutOfRange,
@@ -71,6 +88,7 @@ pub enum ErrorReason {
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
+    UnconsumedData,
     Unimplemented,
     WeekOutOfRange,
     YearOutOfRange,
@@ -107,7 +125,7 @@ pub trait Decode {
     }
 }
 
-enum Date {
+pub enum Date {
     Year { y: u16 },
     YearMonth { y: u16, mo: u8 },
     YearMonthDay { y: u16, mo: u8, d: u8 },
@@ -115,12 +133,7 @@ enum Date {
     YearWeekDay { y: u16, w: u8, d: u8 },
 }
 
-enum MonthOrWeek {
-    Month(u8),
-    Week(u8),
-}
-
-enum Time {
+pub enum Time {
     Hour { h: u8 },
     HourMinute { h: u8, m: u8 },
     HourMinuteSecond { h: u8, m: u8, s: u8 },
@@ -135,7 +148,7 @@ pub struct TzOffset {
     pub m: u8, // Only one country has used a -00xx timezone, Liberia.  They stopped in 1972.
 }
 
-enum DateTimeTzOffset {
+pub enum DateTimeTzOffset {
     Date(Date),
     DateTime(Date, Time),
     DateTz(Date, TzOffset),
@@ -509,7 +522,7 @@ impl<'a> Decoder<'a> {
             Some(b'F') => false,
             _ => return Err(self.err(ErrorReason::ExpectedBool)),
         };
-        self.close_item()?;
+        self.close_item(ErrorReason::MalformedBool)?;
         Ok(value)
     }
 
@@ -597,33 +610,34 @@ impl<'a> Decoder<'a> {
         if sign == -1 && value == 0 {
             return Err(self.err(ErrorReason::NegativeZero));
         }
-        self.close_item()?;
+        self.close_item(ErrorReason::MalformedInteger)?;
         Ok(value)
     }
 
     pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
         self.consume_exact(b'[')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedString))?;
+            .ok_or_else(|| self.err(ErrorReason::ExpectedList))?;
         self.list_depth += 1;
         Ok(())
     }
 
-    pub fn close_item(&mut self) -> Result<(), DecodeError> {
-        let result = if self.list_depth == 0 {
-            Ok(())
+    pub fn close_item(&mut self, reason: ErrorReason) -> Result<(), DecodeError> {
+        if self.list_depth == 0 {
+            if !self.bytes.is_empty() {
+                return Err(self.err(reason));
+            }
         } else {
             match self.bytes.first() {
                 Some(&b',') => {
                     self.consume_byte();
-                    Ok(())
                 }
-                Some(&b']') => Ok(()),
-                None => Ok(()), // Next call will try to consume list close and fail.
-                _ => Err(self.err(ErrorReason::ExpectedListSeparator)),
+                Some(&b']') => {}
+                None => {} // Next call will try to consume list close and fail.
+                _ => return Err(self.err(ErrorReason::ExpectedListSeparator)),
             }
-        };
+        }
         self.debug_bytes = self.bytes;
-        result
+        Ok(())
     }
 
     pub fn consume_date_digit(&mut self) -> Result<u8, DecodeError> {
@@ -660,7 +674,7 @@ impl<'a> Decoder<'a> {
         }
         self.consume_exact(b']')
             .ok_or_else(|| self.err(ErrorReason::ExpectedListEnd))?;
-        self.close_item()?;
+        self.close_item(ErrorReason::MalformedListEnd)?;
         self.list_depth -= 1;
         Ok(())
     }
@@ -719,169 +733,289 @@ impl<'a> Decoder<'a> {
             }
         }
         self.consume_bytes(len + 1);
-        self.close_item()?;
+        self.close_item(ErrorReason::MalformedString)?;
         Ok(value)
     }
 
-    fn consume_date(&mut self) -> Result<Date, DecodeError> {
+    pub fn consume_year_part(&mut self) -> Result<u16, DecodeError> {
         if self.consume_byte() != Some(b'D') {
-            return Err(self.err(ErrorReason::ExpectedDate));
+            return Err(self.err(ErrorReason::ExpectedYear));
         }
         let d0 = u16::from(self.consume_date_digit()?);
         let d1 = u16::from(self.consume_date_digit()?);
         let d2 = u16::from(self.consume_date_digit()?);
         let d3 = u16::from(self.consume_date_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
         let y = 1000 * d0 + 100 * d1 + 10 * d2 + d3;
         if !(1..=9999).contains(&y) {
             return Err(self.err(ErrorReason::YearOutOfRange));
         }
-        match self.bytes.first() {
-            Some(b'-') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Date::Year { y });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedDate)),
-        };
-        let month_or_week = if self.consume_exact(b'W').is_some() {
-            let d0 = u8::from(self.consume_date_digit()?);
-            let d1 = u8::from(self.consume_date_digit()?);
-            let w = 10 * d0 + d1;
-            if !(1..=53).contains(&w) {
-                return Err(self.err(ErrorReason::WeekOutOfRange));
-            }
-            MonthOrWeek::Week(w)
-        } else {
-            let d0 = u8::from(self.consume_date_digit()?);
-            let d1 = u8::from(self.consume_date_digit()?);
-            let mo = 10 * d0 + d1;
-            if !(1..=12).contains(&mo) {
-                return Err(self.err(ErrorReason::MonthOutOfRange));
-            }
-            MonthOrWeek::Month(mo)
-        };
-        match self.bytes.first() {
-            Some(b'-') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return match month_or_week {
-                    MonthOrWeek::Month(mo) => Ok(Date::YearMonth { y, mo }),
-                    MonthOrWeek::Week(w) => Ok(Date::YearWeek { y, w }),
-                }
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedDate)),
-        };
+        Ok(y)
+    }
+
+    pub fn consume_month(&mut self) -> Result<u8, DecodeError> {
+        self.consume_exact(b'-')
+            .ok_or_else(|| self.err(ErrorReason::ExpectedMonth))?;
+        match self.bytes.first().copied() {
+            None => return Err(self.err(ErrorReason::MalformedDate)),
+            Some(b'W') => return Err(self.err(ErrorReason::ExpectedMonth)),
+            _ => {}
+        }
         let d0 = u8::from(self.consume_date_digit()?);
         let d1 = u8::from(self.consume_date_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
+        let mo = 10 * d0 + d1;
+        if !(1..=12).contains(&mo) {
+            return Err(self.err(ErrorReason::MonthOutOfRange));
+        }
+        Ok(mo)
+    }
+
+    pub fn consume_week(&mut self) -> Result<u8, DecodeError> {
+        self.consume_exact(b'-')
+            .ok_or_else(|| self.err(ErrorReason::ExpectedWeek))?;
+        match self.consume_byte() {
+            Some(b'W') => {}
+            Some(b'0'..=b'9') => return Err(self.err(ErrorReason::ExpectedWeek)),
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
+        let d0 = u8::from(self.consume_date_digit()?);
+        let d1 = u8::from(self.consume_date_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
+        let w = 10 * d0 + d1;
+        if !(1..=53).contains(&w) {
+            return Err(self.err(ErrorReason::WeekOutOfRange));
+        }
+        Ok(w)
+    }
+
+    pub fn consume_day(&mut self) -> Result<u8, DecodeError> {
+        self.consume_exact(b'-')
+            .ok_or_else(|| self.err(ErrorReason::ExpectedDay))?;
+        let d0 = u8::from(self.consume_date_digit()?);
+        let d1 = u8::from(self.consume_date_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'T' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
         let d = 10 * d0 + d1;
         if !(1..=31).contains(&d) {
             return Err(self.err(ErrorReason::DayOutOfRange));
         }
+        Ok(d)
+    }
+
+    fn consume_date(&mut self) -> Result<Date, DecodeError> {
+        let y = self.consume_year_part()?;
+        if self.bytes.first().copied() != Some(b'-') {
+            return Ok(Date::Year { y });
+        }
+        enum MonthOrWeek {
+            Month(u8),
+            Week(u8),
+        }
+        let month_or_week = if self.bytes.get(1).copied() == Some(b'W') {
+            MonthOrWeek::Week(self.consume_week()?)
+        } else {
+            MonthOrWeek::Month(self.consume_month()?)
+        };
+        if self.bytes.first().copied() != Some(b'-') {
+            return match month_or_week {
+                MonthOrWeek::Month(mo) => Ok(Date::YearMonth { y, mo }),
+                MonthOrWeek::Week(w) => Ok(Date::YearWeek { y, w }),
+            };
+        }
+        let d = self.consume_day()?;
         match month_or_week {
             MonthOrWeek::Month(mo) => Ok(Date::YearMonthDay { y, mo, d }),
             MonthOrWeek::Week(w) => Ok(Date::YearWeekDay { y, w, d }),
         }
     }
 
-    fn consume_time(&mut self) -> Result<Time, DecodeError> {
+    fn consume_hour(&mut self) -> Result<u8, DecodeError> {
         if self.consume_byte() != Some(b'T') {
-            return Err(self.err(ErrorReason::ExpectedTime));
+            return Err(self.err(ErrorReason::ExpectedHour));
         }
         let d0 = u8::from(self.consume_time_digit()?);
         let d1 = u8::from(self.consume_time_digit()?);
+        match self.bytes.first().copied() {
+            Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
         let h = 10 * d0 + d1;
         if !(0..=23).contains(&h) {
             return Err(self.err(ErrorReason::HourOutOfRange));
         }
-        match self.bytes.first() {
-            Some(b':') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Time::Hour { h });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTime)),
-        };
+        Ok(h)
+    }
+
+    fn consume_minute(&mut self) -> Result<u8, DecodeError> {
+        if self.consume_byte() != Some(b':') {
+            return Err(self.err(ErrorReason::ExpectedMinute));
+        }
         let d0 = u8::from(self.consume_time_digit()?);
         let d1 = u8::from(self.consume_time_digit()?);
+        match self.bytes.first().copied() {
+            Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
         let m = 10 * d0 + d1;
         if !(0..=59).contains(&m) {
             return Err(self.err(ErrorReason::MinuteOutOfRange));
         }
-        match self.bytes.first() {
-            Some(b':') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Time::HourMinute { h, m });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTime)),
-        };
+        Ok(m)
+    }
+
+    fn consume_second(&mut self) -> Result<u8, DecodeError> {
+        if self.consume_byte() != Some(b':') {
+            return Err(self.err(ErrorReason::ExpectedSecond));
+        }
         let d0 = u8::from(self.consume_time_digit()?);
         let d1 = u8::from(self.consume_time_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'.' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
         let s = 10 * d0 + d1;
         if !(0..=60).contains(&s) {
             return Err(self.err(ErrorReason::SecondOutOfRange));
         }
-        match self.bytes.first() {
-            Some(b'.') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Time::HourMinuteSecond { h, m, s });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTime)),
-        };
+        Ok(s)
+    }
+
+    fn consume_millisecond_part(&mut self) -> Result<u16, DecodeError> {
+        if self.consume_byte() != Some(b'.') {
+            return Err(self.err(ErrorReason::ExpectedMillisecond));
+        }
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
-        let ms = 1000 * u16::from(s) + 100 * d0 + 10 * d1 + d2;
-        match self.bytes.first() {
-            Some(b'_') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Time::HourMinuteMillisecond { h, m, ms });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTime)),
-        };
-        let d0 = u32::from(self.consume_time_digit()?);
-        let d1 = u32::from(self.consume_time_digit()?);
-        let d2 = u32::from(self.consume_time_digit()?);
-        let us = 1000 * u32::from(ms) + 100 * d0 + 10 * d1 + d2;
-        match self.bytes.first() {
-            Some(b'_') => self.consume_byte(),
-            None | Some(b'Z') | Some(b'+') | Some(b'~') | Some(b',') | Some(b']') => {
-                return Ok(Time::HourMinuteMicrosecond { h, m, us });
-            }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTime)),
-        };
+        match self.bytes.first().copied() {
+            Some(b'_' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
+        let ms = 100 * d0 + 10 * d1 + d2;
+        Ok(ms)
+    }
+
+    fn consume_millisecond(&mut self) -> Result<u16, DecodeError> {
+        let s = self.consume_second()?;
+        let ms = self.consume_millisecond_part()?;
+        Ok(1000 * u16::from(s) + ms)
+    }
+
+    fn consume_microsecond_part(&mut self) -> Result<u32, DecodeError> {
+        if self.consume_byte() != Some(b'_') {
+            return Err(self.err(ErrorReason::ExpectedMicrosecond));
+        }
+        let d0 = u16::from(self.consume_time_digit()?);
+        let d1 = u16::from(self.consume_time_digit()?);
+        let d2 = u16::from(self.consume_time_digit()?);
+        match self.bytes.first().copied() {
+            Some(b'_' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
+        let us = 100 * d0 + 10 * d1 + d2;
+        Ok(u32::from(us))
+    }
+
+    fn consume_microsecond(&mut self) -> Result<u32, DecodeError> {
+        let s = self.consume_second()?;
+        let ms = self.consume_millisecond_part()?;
+        let us = self.consume_microsecond_part()?;
+        Ok(1_000_000 * u32::from(s) + 1_000 * u32::from(ms) + us)
+    }
+
+    fn consume_nanosecond_part(&mut self) -> Result<u64, DecodeError> {
+        if self.consume_byte() != Some(b'_') {
+            return Err(self.err(ErrorReason::ExpectedNanosecond));
+        }
         let d0 = u64::from(self.consume_time_digit()?);
         let d1 = u64::from(self.consume_time_digit()?);
         let d2 = u64::from(self.consume_time_digit()?);
-        let ns = 1000 * u64::from(us) + 100 * d0 + 10 * d1 + d2;
+        match self.bytes.first().copied() {
+            Some(b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTime)),
+        }
+        let ns = 100 * d0 + 10 * d1 + d2;
+        Ok(ns)
+    }
+
+    fn consume_nanosecond(&mut self) -> Result<u64, DecodeError> {
+        let s = self.consume_second()?;
+        let ms = self.consume_millisecond_part()?;
+        let us = self.consume_microsecond_part()?;
+        let ns = self.consume_nanosecond_part()?;
+        Ok(1_000_000_000 * u64::from(s) + 1_000_000 * u64::from(ms) + 1_000 * u64::from(us) + ns)
+    }
+
+    fn consume_time(&mut self) -> Result<Time, DecodeError> {
+        let h = self.consume_hour()?;
+        if self.bytes.first().copied() != Some(b':') {
+            return Ok(Time::Hour { h });
+        }
+        let m = self.consume_minute()?;
+        if self.bytes.first().copied() != Some(b':') {
+            return Ok(Time::HourMinute { h, m });
+        }
+        let s = self.consume_second()?;
+        if self.bytes.first().copied() != Some(b'_') {
+            return Ok(Time::HourMinuteSecond { h, m, s });
+        }
+        let ms = 1000 * u16::from(s) + self.consume_millisecond_part()?;
+        if self.bytes.first().copied() != Some(b'_') {
+            return Ok(Time::HourMinuteMillisecond { h, m, ms });
+        }
+        let us = 1000 * u32::from(ms) + self.consume_microsecond_part()?;
+        if self.bytes.first().copied() != Some(b'_') {
+            return Ok(Time::HourMinuteMicrosecond { h, m, us });
+        }
+        let ns = 1000 * u64::from(ms) + self.consume_nanosecond_part()?;
         Ok(Time::HourMinuteNanosecond { h, m, ns })
     }
 
-    fn consume_tz_offset(&mut self) -> Result<TzOffset, DecodeError> {
-        let sign = match self.bytes.first() {
+    fn consume_tz_offset(&mut self, reason: ErrorReason) -> Result<TzOffset, DecodeError> {
+        let sign = match self.consume_byte() {
+            Some(b'-' | b'T' | b':' | b'.' | b'_') => return Err(self.err(reason)),
+            Some(b',' | b']') | None => return Err(self.err(ErrorReason::ExpectedTzOffset)),
             Some(b'Z') => {
-                self.consume_byte();
                 return Ok(TzOffset { h: 0, m: 0 });
             }
             Some(b'+') => 1,
             Some(b'~') => -1,
             _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
         };
-        self.consume_byte();
         let d0 = i8::try_from(self.consume_tz_offset_digit()?).unwrap();
         let d1 = i8::try_from(self.consume_tz_offset_digit()?).unwrap();
         let h = sign * (10 * d0 + d1);
         if !(-23..=23).contains(&h) {
             return Err(self.err(ErrorReason::TimezoneOffsetHourOutOfRange));
         }
-        match self.bytes.first() {
+        match self.bytes.first().copied() {
             Some(b':') => self.consume_byte(),
-            None | Some(b',') | Some(b']') => {
+            Some(b',' | b']') | None => {
                 if h == 0 {
                     return Err(self.err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ));
                 }
                 return Ok(TzOffset { h, m: 0 });
             }
-            Some(..) => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
+            _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
         };
         let d0 = u8::from(self.consume_tz_offset_digit()?);
         let d1 = u8::from(self.consume_tz_offset_digit()?);
+        match self.bytes.first().copied() {
+            Some(b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
+        }
         let m = 10 * d0 + d1;
         if !(0..=59).contains(&m) {
             Err(self.err(ErrorReason::TimezoneOffsetMinuteOutOfRange))
@@ -894,7 +1028,7 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    fn consume_date_time_tz_offset(&mut self) -> Result<DateTimeTzOffset, DecodeError> {
+    pub fn consume_date_time_tz_offset(&mut self) -> Result<DateTimeTzOffset, DecodeError> {
         let opt_date = if self.bytes.first().copied() == Some(b'D') {
             Some(self.consume_date()?)
         } else {
@@ -919,8 +1053,9 @@ impl<'a> Decoder<'a> {
         }
         let opt_tz_offset = match self.bytes.first() {
             None | Some(&b',') | Some(&b']') => None,
-            _ => Some(self.consume_tz_offset()?),
+            _ => Some(self.consume_tz_offset(ErrorReason::ExpectedTzOffset)?),
         };
+        self.close_item(ErrorReason::MalformedDateTimeTzOffset)?;
         match (opt_date, opt_time, opt_tz_offset) {
             (Some(date), None, None) => Ok(DateTimeTzOffset::Date(date)),
             (Some(date), Some(time), None) => Ok(DateTimeTzOffset::DateTime(date, time)),
@@ -933,534 +1068,466 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn consume_year(&mut self) -> Result<Year, DecodeError> {
-        if let DateTimeTzOffset::Date(Date::Year { y }) = self.consume_date_time_tz_offset()? {
-            self.close_item()?;
-            Ok(Year { y })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYear))
-        }
+        let result = Ok(Year {
+            y: self.consume_year_part()?,
+        });
+        self.close_item(ErrorReason::ExpectedYear)?;
+        result
     }
 
     pub fn consume_year_tz_offset(&mut self) -> Result<YearTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTz(Date::Year { y }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearTzOffset { y, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearTzOffset))
-        }
+        let result = Ok(YearTzOffset {
+            y: self.consume_year_part()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearTzOffset)?;
+        result
     }
 
     pub fn consume_year_month(&mut self) -> Result<YearMonth, DecodeError> {
-        if let DateTimeTzOffset::Date(Date::YearMonth { y, mo }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonth { y, mo })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonth))
-        }
+        let result = Ok(YearMonth {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonth)?;
+        result
     }
 
     pub fn consume_year_week(&mut self) -> Result<YearWeek, DecodeError> {
-        if let DateTimeTzOffset::Date(Date::YearWeek { y, w }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeek { y, w })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeek))
-        }
+        let result = Ok(YearWeek {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeek)?;
+        result
     }
 
     pub fn consume_year_month_tz_offset(&mut self) -> Result<YearMonthTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTz(Date::YearMonth { y, mo }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthTzOffset { y, mo, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthTzOffset))
-        }
+        let result = Ok(YearMonthTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearMonthTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_tz_offset(&mut self) -> Result<YearWeekTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTz(Date::YearWeek { y, w }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekTzOffset { y, w, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekTzOffset))
-        }
+        let result = Ok(YearWeekTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearWeekTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day(&mut self) -> Result<YearMonthDay, DecodeError> {
-        if let DateTimeTzOffset::Date(Date::YearMonthDay { y, mo, d }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDay { y, mo, d })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDay))
-        }
+        let result = Ok(YearMonthDay {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDay)?;
+        result
     }
 
     pub fn consume_year_week_day(&mut self) -> Result<YearWeekDay, DecodeError> {
-        if let DateTimeTzOffset::Date(Date::YearWeekDay { y, w, d }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDay { y, w, d })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDay))
-        }
+        let result = Ok(YearWeekDay {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDay)?;
+        result
     }
 
     pub fn consume_year_month_day_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTz(Date::YearMonthDay { y, mo, d }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayTzOffset { y, mo, d, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayTzOffset))
-        }
+        let result = Ok(YearMonthDayTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearMonthDayTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_tz_offset(&mut self) -> Result<YearWeekDayTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTz(Date::YearWeekDay { y, w, d }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayTzOffset { y, w, d, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayTzOffset))
-        }
+        let result = Ok(YearWeekDayTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearWeekDayTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour(&mut self) -> Result<YearMonthDayHour, DecodeError> {
-        if let DateTimeTzOffset::DateTime(Date::YearMonthDay { y, mo, d }, Time::Hour { h }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHour { y, mo, d, h })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHour))
-        }
+        let result = Ok(YearMonthDayHour {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHour)?;
+        result
     }
 
     pub fn consume_year_week_day_hour(&mut self) -> Result<YearWeekDayHour, DecodeError> {
-        if let DateTimeTzOffset::DateTime(Date::YearWeekDay { y, w, d }, Time::Hour { h }) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHour { y, w, d, h })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHour))
-        }
+        let result = Ok(YearWeekDayHour {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHour)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(Date::YearMonthDay { y, mo, d }, Time::Hour { h }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourTzOffset { y, mo, d, h, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourTzOffset))
-        }
+        let result = Ok(YearMonthDayHourTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearMonthDayHourTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(Date::YearWeekDay { y, w, d }, Time::Hour { h }, tz) =
-            self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourTzOffset { y, w, d, h, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourTzOffset))
-        }
+        let result = Ok(YearWeekDayHourTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute(
         &mut self,
     ) -> Result<YearMonthDayHourMinute, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinute { h, m },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinute { y, mo, d, h, m })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinute))
-        }
+        let result = Ok(YearMonthDayHourMinute {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinute)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute(
         &mut self,
     ) -> Result<YearWeekDayHourMinute, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinute { h, m },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinute { y, w, d, h, m })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinute))
-        }
+        let result = Ok(YearWeekDayHourMinute {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinute)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinute { h, m },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteTzOffset { y, mo, d, h, m, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteTzOffset))
-        }
+        let result = Ok(YearMonthDayHourMinuteTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearMonthDayHourMinuteTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinute { h, m },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteTzOffset { y, w, d, h, m, tz })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteTzOffset))
-        }
+        let result = Ok(YearWeekDayHourMinuteTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourMinuteTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_second(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteSecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteSecond { h, m, s },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteSecond { y, mo, d, h, m, s })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteSecond))
-        }
+        let result = Ok(YearMonthDayHourMinuteSecond {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            s: self.consume_second()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteSecond)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_second(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteSecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteSecond { h, m, s },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteSecond { y, w, d, h, m, s })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteSecond))
-        }
+        let result = Ok(YearWeekDayHourMinuteSecond {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            s: self.consume_second()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteSecond)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_second_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteSecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteSecond { h, m, s },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteSecondTzOffset {
-                y,
-                mo,
-                d,
-                h,
-                m,
-                s,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteSecondTzOffset))
-        }
+        let result = Ok(YearMonthDayHourMinuteSecondTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            s: self.consume_second()?,
+            tz: self
+                .consume_tz_offset(ErrorReason::ExpectedYearMonthDayHourMinuteSecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteSecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_second_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteSecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteSecond { h, m, s },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteSecondTzOffset {
-                y,
-                w,
-                d,
-                h,
-                m,
-                s,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteSecondTzOffset))
-        }
+        let result = Ok(YearWeekDayHourMinuteSecondTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            s: self.consume_second()?,
+            tz: self.consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourMinuteSecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteSecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_millisecond(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteMillisecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteMillisecond { h, m, ms },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteMillisecond { y, mo, d, h, m, ms })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecond))
-        }
+        let result = Ok(YearMonthDayHourMinuteMillisecond {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ms: self.consume_millisecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecond)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_millisecond(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteMillisecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteMillisecond { h, m, ms },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteMillisecond { y, w, d, h, m, ms })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteMillisecond))
-        }
+        let result = Ok(YearWeekDayHourMinuteMillisecond {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ms: self.consume_millisecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteMillisecond)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_millisecond_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteMillisecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteMillisecond { h, m, ms },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteMillisecondTzOffset {
-                y,
-                mo,
-                d,
-                h,
-                m,
-                ms,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecondTzOffset))
-        }
+        let result = Ok(YearMonthDayHourMinuteMillisecondTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ms: self.consume_millisecond()?,
+            tz: self.consume_tz_offset(
+                ErrorReason::ExpectedYearMonthDayHourMinuteMillisecondTzOffset,
+            )?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteMillisecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_millisecond_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteMillisecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteMillisecond { h, m, ms },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteMillisecondTzOffset {
-                y,
-                w,
-                d,
-                h,
-                m,
-                ms,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteMillisecondTzOffset))
-        }
+        let result = Ok(YearWeekDayHourMinuteMillisecondTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ms: self.consume_millisecond()?,
+            tz: self
+                .consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourMinuteMillisecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteMillisecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_microsecond(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteMicrosecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteMicrosecond { h, m, us },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteMicrosecond { y, mo, d, h, m, us })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecond))
-        }
+        let result = Ok(YearMonthDayHourMinuteMicrosecond {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            us: self.consume_microsecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecond)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_microsecond(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteMicrosecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteMicrosecond { h, m, us },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteMicrosecond { y, w, d, h, m, us })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteMicrosecond))
-        }
+        let result = Ok(YearWeekDayHourMinuteMicrosecond {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            us: self.consume_microsecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteMicrosecond)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_microsecond_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteMicrosecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteMicrosecond { h, m, us },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteMicrosecondTzOffset {
-                y,
-                mo,
-                d,
-                h,
-                m,
-                us,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecondTzOffset))
-        }
+        let result = Ok(YearMonthDayHourMinuteMicrosecondTzOffset {
+            y: self.consume_year_part()?,
+            m: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            mo: self.consume_minute()?,
+            us: self.consume_microsecond()?,
+            tz: self.consume_tz_offset(
+                ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecondTzOffset,
+            )?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteMicrosecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_microsecond_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteMicrosecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteMicrosecond { h, m, us },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteMicrosecondTzOffset {
-                y,
-                w,
-                d,
-                h,
-                m,
-                us,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteMicrosecondTzOffset))
-        }
+        let result = Ok(YearWeekDayHourMinuteMicrosecondTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            us: self.consume_microsecond()?,
+            tz: self
+                .consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourMinuteMicrosecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteMicrosecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_nanosecond(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteNanosecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteNanosecond { h, m, ns },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteNanosecond { y, mo, d, h, m, ns })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecond))
-        }
+        let result = Ok(YearMonthDayHourMinuteNanosecond {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ns: self.consume_nanosecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecond)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_nanosecond(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteNanosecond, DecodeError> {
-        if let DateTimeTzOffset::DateTime(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteNanosecond { h, m, ns },
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteNanosecond { y, w, d, h, m, ns })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteNanosecond))
-        }
+        let result = Ok(YearWeekDayHourMinuteNanosecond {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ns: self.consume_nanosecond()?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteNanosecond)?;
+        result
     }
 
     pub fn consume_year_month_day_hour_minute_nanosecond_tz_offset(
         &mut self,
     ) -> Result<YearMonthDayHourMinuteNanosecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearMonthDay { y, mo, d },
-            Time::HourMinuteNanosecond { h, m, ns },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearMonthDayHourMinuteNanosecondTzOffset {
-                y,
-                mo,
-                d,
-                h,
-                m,
-                ns,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecondTzOffset))
-        }
+        let result = Ok(YearMonthDayHourMinuteNanosecondTzOffset {
+            y: self.consume_year_part()?,
+            mo: self.consume_month()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ns: self.consume_nanosecond()?,
+            tz: self
+                .consume_tz_offset(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearMonthDayHourMinuteNanosecondTzOffset)?;
+        result
     }
 
     pub fn consume_year_week_day_hour_minute_nanosecond_tz_offset(
         &mut self,
     ) -> Result<YearWeekDayHourMinuteNanosecondTzOffset, DecodeError> {
-        if let DateTimeTzOffset::DateTimeTz(
-            Date::YearWeekDay { y, w, d },
-            Time::HourMinuteNanosecond { h, m, ns },
-            tz,
-        ) = self.consume_date_time_tz_offset()?
-        {
-            self.close_item()?;
-            Ok(YearWeekDayHourMinuteNanosecondTzOffset {
-                y,
-                w,
-                d,
-                h,
-                m,
-                ns,
-                tz,
-            })
-        } else {
-            Err(self.err(ErrorReason::ExpectedYearWeekDayHourMinuteNanosecondTzOffset))
-        }
+        let result = Ok(YearWeekDayHourMinuteNanosecondTzOffset {
+            y: self.consume_year_part()?,
+            w: self.consume_week()?,
+            d: self.consume_day()?,
+            h: self.consume_hour()?,
+            m: self.consume_minute()?,
+            ns: self.consume_nanosecond()?,
+            tz: self
+                .consume_tz_offset(ErrorReason::ExpectedYearWeekDayHourMinuteNanosecondTzOffset)?,
+        });
+        self.close_item(ErrorReason::ExpectedYearWeekDayHourMinuteNanosecondTzOffset)?;
+        result
     }
 }
