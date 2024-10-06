@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
-echo PWD=$PWD
+top_level_dir=$(
+  cd "$(dirname $0)"
+  pwd
+)
 set -e
 set -x
 cat Readme.md |perl -0777 -pe 's/(# Cargo Geiger Safety Report).+?```.+?```/$1/s' >Readme.md.pruned

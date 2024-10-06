@@ -40,14 +40,14 @@ fn consume_integer() {
         (b"1", Ok(1)),
         (b"12", Ok(12)),
         (b"123", Ok(123)),
-        (b"1_234", Ok(1234)),
-        (b"12_345", Ok(12345)),
-        (b"123_456", Ok(123456)),
-        (b"1_234_567", Ok(1234567)),
-        (b"-1_234_567", Ok(-1234567)),
-        (b"-123_456", Ok(-123456)),
-        (b"-12_345", Ok(-12345)),
-        (b"-1_234", Ok(-1234)),
+        (b"1_234", Ok(1_234)),
+        (b"12_345", Ok(12_345)),
+        (b"123_456", Ok(123_456)),
+        (b"1_234_567", Ok(1_234_567)),
+        (b"-1_234_567", Ok(-1_234_567)),
+        (b"-123_456", Ok(-123_456)),
+        (b"-12_345", Ok(-12_345)),
+        (b"-1_234", Ok(-1_234)),
         (b"-123", Ok(-123)),
         (b"-12", Ok(-12)),
         (b"-1", Ok(-1)),
@@ -135,10 +135,12 @@ fn consume_string() {
 }
 
 #[test]
+#[allow(clippy::zero_prefixed_literal)]
+#[allow(clippy::too_many_lines)]
 fn consume_date_time_tz_offset() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedDateOrTime)),
-        (b"T", Err(ErrorReason::MalformedTime)),
+        (b"Z", Err(ErrorReason::ExpectedDateOrTime)),
         (b"!", Err(ErrorReason::ExpectedDateOrTime)),
         // Year ///////////////////////////////////////////////////////////////////////////////////
         (b"D1", Err(ErrorReason::MalformedDate)),
@@ -1814,12 +1816,11 @@ fn date() {
         ),
     ] {
         let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
-        let date = Decoder::new(bytes)
+        let date = *Decoder::new(bytes)
             .consume_date_time_tz_offset()
             .expect(&msg)
             .date()
-            .expect(&msg)
-            .clone();
+            .expect(&msg);
         assert_eq!(date.year(), y, "{msg}");
         assert_eq!(date.month(), mo, "{msg}");
         assert_eq!(date.week(), w, "{msg}");
@@ -1862,12 +1863,11 @@ fn time() {
         ),
     ] {
         let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
-        let time = Decoder::new(bytes)
+        let time = *Decoder::new(bytes)
             .consume_date_time_tz_offset()
             .expect(&msg)
             .time()
-            .expect(&msg)
-            .clone();
+            .expect(&msg);
         assert_eq!(time.hour(), h, "{msg}");
         assert_eq!(time.minute(), m, "{msg}");
         assert_eq!(time.second(), s, "{msg}");
@@ -1933,4 +1933,9 @@ fn list_string_string() {
     assert_eq!(decoder.consume_string(), Ok("b".to_string()));
     decoder.consume_close_list().unwrap();
     decoder.close().unwrap();
+}
+
+#[test]
+fn debug() {
+    let _ = format!("{:?}", Decoder::new(b"x"));
 }

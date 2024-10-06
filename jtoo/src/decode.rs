@@ -96,6 +96,7 @@ pub enum ErrorReason {
     ZeroTimeZoneOffsetShouldBeZ,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Eq, PartialEq)]
 pub struct DecodeError {
     pub reason: ErrorReason,
@@ -113,9 +114,12 @@ impl Debug for DecodeError {
 }
 
 pub trait Decode {
+    #[allow(clippy::missing_errors_doc)]
     fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError>
     where
         Self: Sized;
+
+    #[allow(clippy::missing_errors_doc)]
     fn decode(bytes: &[u8]) -> Result<Self, DecodeError>
     where
         Self: Sized,
@@ -134,6 +138,7 @@ pub enum Date {
     YearWeekDay { y: u16, w: u8, d: u8 },
 }
 impl Date {
+    #[must_use]
     pub fn year(&self) -> Option<u16> {
         match self {
             Date::Year { y, .. }
@@ -144,6 +149,7 @@ impl Date {
         }
     }
 
+    #[must_use]
     pub fn month(&self) -> Option<u8> {
         match self {
             Date::Year { .. } | Date::YearWeek { .. } | Date::YearWeekDay { .. } => None,
@@ -151,6 +157,7 @@ impl Date {
         }
     }
 
+    #[must_use]
     pub fn week(&self) -> Option<u8> {
         match self {
             Date::Year { .. } | Date::YearMonth { .. } | Date::YearMonthDay { .. } => None,
@@ -158,6 +165,7 @@ impl Date {
         }
     }
 
+    #[must_use]
     pub fn day(&self) -> Option<u8> {
         match self {
             Date::Year { .. } | Date::YearMonth { .. } | Date::YearWeek { .. } => None,
@@ -176,6 +184,7 @@ pub enum Time {
     HourMinuteNanosecond { h: u8, m: u8, ns: u64 },
 }
 impl Time {
+    #[must_use]
     pub fn hour(&self) -> Option<u8> {
         match self {
             Time::Hour { h, .. }
@@ -187,6 +196,7 @@ impl Time {
         }
     }
 
+    #[must_use]
     pub fn minute(&self) -> Option<u8> {
         match self {
             Time::Hour { .. } => None,
@@ -198,6 +208,8 @@ impl Time {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn second(&self) -> Option<u8> {
         match self {
             Time::Hour { .. } | Time::HourMinute { .. } => None,
@@ -210,6 +222,8 @@ impl Time {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn millisecond(&self) -> Option<u16> {
         match self {
             Time::Hour { .. } | Time::HourMinute { .. } | Time::HourMinuteSecond { .. } => None,
@@ -219,6 +233,8 @@ impl Time {
         }
     }
 
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn microsecond(&self) -> Option<u32> {
         match self {
             Time::Hour { .. }
@@ -230,6 +246,7 @@ impl Time {
         }
     }
 
+    #[must_use]
     pub fn nanosecond(&self) -> Option<u64> {
         match self {
             Time::Hour { .. }
@@ -258,6 +275,7 @@ pub enum DateTimeTzOffset {
     TimeTz(Time, TzOffset),
 }
 impl DateTimeTzOffset {
+    #[must_use]
     pub fn date(&self) -> Option<&Date> {
         match self {
             DateTimeTzOffset::Date(d)
@@ -268,6 +286,7 @@ impl DateTimeTzOffset {
         }
     }
 
+    #[must_use]
     pub fn time(&self) -> Option<&Time> {
         match self {
             DateTimeTzOffset::Date(..) | DateTimeTzOffset::DateTz(..) => None,
@@ -278,6 +297,7 @@ impl DateTimeTzOffset {
         }
     }
 
+    #[must_use]
     pub fn tz_offset(&self) -> Option<&TzOffset> {
         match self {
             DateTimeTzOffset::Date(..)
@@ -297,6 +317,7 @@ pub struct Decoder<'a> {
     list_depth: usize,
 }
 impl<'a> Decoder<'a> {
+    #[must_use]
     pub const fn new(bytes: &'a [u8]) -> Self {
         Self {
             bytes,
@@ -305,6 +326,8 @@ impl<'a> Decoder<'a> {
         }
     }
 
+    /// # Errors
+    /// Returns `Err` if the decoder has unconsumed data.
     pub fn close(self) -> Result<(), DecodeError> {
         if self.list_depth != 0 {
             return Err(self.err(ErrorReason::ListEndNotConsumed));
@@ -316,13 +339,20 @@ impl<'a> Decoder<'a> {
     }
 
     fn err(&self, reason: ErrorReason) -> DecodeError {
-        let debug_bytes = Vec::from_iter(self.debug_bytes.iter().take(30).copied());
+        let debug_bytes = self
+            .debug_bytes
+            .iter()
+            .take(30)
+            .copied()
+            .collect::<Vec<_>>();
         DecodeError {
             reason,
             debug_bytes,
         }
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a bool, or the buffer is empty.
     pub fn consume_bool(&mut self) -> Result<bool, DecodeError> {
         let value = match self.consume_byte() {
             Some(b'T') => true,
@@ -334,7 +364,7 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_byte(&mut self) -> Option<u8> {
-        match self.bytes.get(0).copied() {
+        match self.bytes.first().copied() {
             Some(b) => {
                 self.bytes = &self.bytes[1..];
                 Some(b)
@@ -356,6 +386,8 @@ impl<'a> Decoder<'a> {
         }
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not an integer, or the buffer is empty.
     pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
         let mut sign = if self.consume_exact(b'-').is_some() {
             -1
@@ -393,10 +425,8 @@ impl<'a> Decoder<'a> {
                         if group_digit_count != 3 {
                             return Err(self.err(ErrorReason::IncorrectDigitGrouping));
                         }
-                    } else {
-                        if value == 0 {
-                            return Err(self.err(ErrorReason::IncorrectDigitGrouping));
-                        }
+                    } else if value == 0 {
+                        return Err(self.err(ErrorReason::IncorrectDigitGrouping));
                     }
                     seen_underscore = true;
                     group_digit_count = 0;
@@ -421,6 +451,8 @@ impl<'a> Decoder<'a> {
         Ok(value)
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not an open list symbol `[`, or the buffer is empty.
     pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
         self.consume_exact(b'[')
             .ok_or_else(|| self.err(ErrorReason::ExpectedList))?;
@@ -428,6 +460,7 @@ impl<'a> Decoder<'a> {
         Ok(())
     }
 
+    #[allow(clippy::match_same_arms)]
     fn close_item(&mut self, reason: ErrorReason) -> Result<(), DecodeError> {
         if self.list_depth == 0 {
             if !self.bytes.is_empty() {
@@ -449,32 +482,31 @@ impl<'a> Decoder<'a> {
 
     fn consume_date_digit(&mut self) -> Result<u8, DecodeError> {
         match self.consume_byte() {
-            Some(b) if (b'0'..=b'9').contains(&b) => Ok(b - b'0'),
+            Some(b) if b.is_ascii_digit() => Ok(b - b'0'),
             _ => Err(self.err(ErrorReason::MalformedDate)),
         }
     }
 
     fn consume_tz_offset_digit(&mut self) -> Result<u8, DecodeError> {
         match self.consume_byte() {
-            Some(b) if (b'0'..=b'9').contains(&b) => Ok(b - b'0'),
+            Some(b) if b.is_ascii_digit() => Ok(b - b'0'),
             _ => Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
         }
     }
 
     fn consume_time_digit(&mut self) -> Result<u8, DecodeError> {
         match self.consume_byte() {
-            Some(b) if (b'0'..=b'9').contains(&b) => Ok(b - b'0'),
+            Some(b) if b.is_ascii_digit() => Ok(b - b'0'),
             _ => Err(self.err(ErrorReason::MalformedTime)),
         }
     }
 
     pub fn has_another_list_item(&mut self) -> bool {
-        match self.bytes.first() {
-            None | Some(&b']') => false,
-            _ => true,
-        }
+        !matches!(self.bytes.first(), None | Some(&b']'))
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a close list symbol `]`, or the buffer is empty.
     pub fn consume_close_list(&mut self) -> Result<(), DecodeError> {
         if self.list_depth == 0 {
             return Err(self.err(ErrorReason::NotInList));
@@ -486,6 +518,9 @@ impl<'a> Decoder<'a> {
         Ok(())
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a string, or the buffer is empty.
+    #[allow(clippy::missing_panics_doc)]
     pub fn consume_string(&mut self) -> Result<String, DecodeError> {
         match self.bytes.first() {
             Some(b'"') => {}
@@ -571,8 +606,8 @@ impl<'a> Decoder<'a> {
             Some(b'W') => return Err(self.err(ErrorReason::ExpectedMonth)),
             _ => {}
         }
-        let d0 = u8::from(self.consume_date_digit()?);
-        let d1 = u8::from(self.consume_date_digit()?);
+        let d0 = self.consume_date_digit()?;
+        let d1 = self.consume_date_digit()?;
         match self.bytes.first().copied() {
             Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedDate)),
@@ -592,8 +627,8 @@ impl<'a> Decoder<'a> {
             Some(b'0'..=b'9') => return Err(self.err(ErrorReason::ExpectedWeek)),
             _ => return Err(self.err(ErrorReason::MalformedDate)),
         }
-        let d0 = u8::from(self.consume_date_digit()?);
-        let d1 = u8::from(self.consume_date_digit()?);
+        let d0 = self.consume_date_digit()?;
+        let d1 = self.consume_date_digit()?;
         match self.bytes.first().copied() {
             Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedDate)),
@@ -608,8 +643,8 @@ impl<'a> Decoder<'a> {
     fn consume_day(&mut self) -> Result<u8, DecodeError> {
         self.consume_exact(b'-')
             .ok_or_else(|| self.err(ErrorReason::ExpectedDay))?;
-        let d0 = u8::from(self.consume_date_digit()?);
-        let d1 = u8::from(self.consume_date_digit()?);
+        let d0 = self.consume_date_digit()?;
+        let d1 = self.consume_date_digit()?;
         match self.bytes.first().copied() {
             Some(b'T' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedDate)),
@@ -622,13 +657,13 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_date(&mut self) -> Result<Date, DecodeError> {
-        let y = self.consume_year()?;
-        if self.bytes.first().copied() != Some(b'-') {
-            return Ok(Date::Year { y });
-        }
         enum MonthOrWeek {
             Month(u8),
             Week(u8),
+        }
+        let y = self.consume_year()?;
+        if self.bytes.first().copied() != Some(b'-') {
+            return Ok(Date::Year { y });
         }
         let month_or_week = if self.bytes.get(1).copied() == Some(b'W') {
             MonthOrWeek::Week(self.consume_week()?)
@@ -652,8 +687,8 @@ impl<'a> Decoder<'a> {
         if self.consume_byte() != Some(b'T') {
             return Err(self.err(ErrorReason::ExpectedHour));
         }
-        let d0 = u8::from(self.consume_time_digit()?);
-        let d1 = u8::from(self.consume_time_digit()?);
+        let d0 = self.consume_time_digit()?;
+        let d1 = self.consume_time_digit()?;
         match self.bytes.first().copied() {
             Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedTime)),
@@ -669,8 +704,8 @@ impl<'a> Decoder<'a> {
         if self.consume_byte() != Some(b':') {
             return Err(self.err(ErrorReason::ExpectedMinute));
         }
-        let d0 = u8::from(self.consume_time_digit()?);
-        let d1 = u8::from(self.consume_time_digit()?);
+        let d0 = self.consume_time_digit()?;
+        let d1 = self.consume_time_digit()?;
         match self.bytes.first().copied() {
             Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedTime)),
@@ -686,8 +721,8 @@ impl<'a> Decoder<'a> {
         if self.consume_byte() != Some(b':') {
             return Err(self.err(ErrorReason::ExpectedSecond));
         }
-        let d0 = u8::from(self.consume_time_digit()?);
-        let d1 = u8::from(self.consume_time_digit()?);
+        let d0 = self.consume_time_digit()?;
+        let d1 = self.consume_time_digit()?;
         match self.bytes.first().copied() {
             Some(b'.' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedTime)),
@@ -796,8 +831,8 @@ impl<'a> Decoder<'a> {
             }
             _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
         };
-        let d0 = u8::from(self.consume_tz_offset_digit()?);
-        let d1 = u8::from(self.consume_tz_offset_digit()?);
+        let d0 = self.consume_tz_offset_digit()?;
+        let d1 = self.consume_tz_offset_digit()?;
         match self.bytes.first().copied() {
             Some(b',' | b']') | None => {}
             _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
@@ -814,6 +849,8 @@ impl<'a> Decoder<'a> {
         }
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a date or time, or the buffer is empty.
     pub fn consume_date_time_tz_offset(&mut self) -> Result<DateTimeTzOffset, DecodeError> {
         let opt_date = if self.bytes.first().copied() == Some(b'D') {
             Some(self.consume_date()?)
@@ -829,16 +866,15 @@ impl<'a> Decoder<'a> {
             return Err(self.err(ErrorReason::ExpectedDateOrTime));
         }
         match &opt_date {
-            None => {}
             Some(Date::Year { .. } | Date::YearMonth { .. } | Date::YearWeek { .. }) => {
                 if opt_time.is_some() {
                     return Err(self.err(ErrorReason::MalformedDateTimeTzOffset));
                 }
             }
-            Some(Date::YearMonthDay { .. } | Date::YearWeekDay { .. }) => {}
+            Some(Date::YearMonthDay { .. } | Date::YearWeekDay { .. }) | None => {}
         }
         let opt_tz_offset = match self.bytes.first() {
-            None | Some(&b',') | Some(&b']') => None,
+            None | Some(&b',' | &b']') => None,
             _ => Some(self.consume_tz_offset(ErrorReason::ExpectedTzOffset)?),
         };
         self.close_item(ErrorReason::MalformedDateTimeTzOffset)?;
