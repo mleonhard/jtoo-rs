@@ -12,9 +12,7 @@ env:
 
 jobs:
   check:
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -31,6 +29,7 @@ jobs:
       - name: Install clippy
         run: cargo clippy --version || rustup component add clippy
       - run: cargo install cargo-readme
+      - run: cargo --list
       - name: Check
         run: ./check-all.sh
       - run: du -sh cargo/ target/ || true

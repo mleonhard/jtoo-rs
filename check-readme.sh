@@ -6,6 +6,8 @@ top_level_dir=$(
 set -e
 set -x
 cat Readme.md |perl -0777 -pe 's/(# Cargo Geiger Safety Report).+?```.+?```/$1/s' >Readme.md.pruned
+which cargo
+cargo --list
 cargo readme --no-title --no-indent-headings >Readme.md.tmp
 diff Readme.md.pruned Readme.md.tmp || (
   set +x
