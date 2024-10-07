@@ -3,7 +3,7 @@ jtoo
 [![crates.io version](https://img.shields.io/crates/v/jtoo.svg)](https://crates.io/crates/jtoo)
 [![license: Apache 2.0](https://raw.githubusercontent.com/mleonhard/jtoo/main/license-apache-2.0.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 [![unsafe forbidden](https://raw.githubusercontent.com/mleonhard/jtoo/main/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
-[![pipeline status](https://github.com/mleonhard/jtoo/workflows/CI/badge.svg)](https://github.com/mleonhard/jtoo/actions)
+[![pipeline status](https://github.com/mleonhard/jtoo-rs/workflows/CI/badge.svg)](https://github.com/mleonhard/jtoo-rs/actions)
 
 A Rust library for serializing and deserializing the [JTOO data format](https://github.com/mleonhard/jtoo-format).
 
