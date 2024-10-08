@@ -12,6 +12,7 @@ fn consume_bool() {
         (b"".as_slice(), Err(ErrorReason::ExpectedBool)),
         (b"\"a\"", Err(ErrorReason::ExpectedBool)),
         (b"!", Err(ErrorReason::ExpectedBool)),
+        (b"TT", Err(ErrorReason::MalformedBool)),
         (b"T", Ok(true)),
         (b"F", Ok(false)),
     ] {
@@ -33,8 +34,9 @@ fn consume_integer() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedInteger)),
         (b"\"a\"", Err(ErrorReason::ExpectedInteger)),
-        (b"T", Err(ErrorReason::ExpectedInteger)),
+        (b"Y", Err(ErrorReason::ExpectedInteger)),
         (b"!", Err(ErrorReason::ExpectedInteger)),
+        (b"-", Err(ErrorReason::ExpectedInteger)),
         (b"-0", Err(ErrorReason::NegativeZero)),
         (b"0", Ok(0)),
         (b"1", Ok(1)),
@@ -61,6 +63,10 @@ fn consume_integer() {
             b"-9_223_372_036_854_775_809",
             Err(ErrorReason::IntegerTooLarge),
         ),
+        (
+            b"9_900_000_000_000_000_000",
+            Err(ErrorReason::IntegerTooLarge),
+        ),
         (b"-0", Err(ErrorReason::NegativeZero)),
         (b"-00", Err(ErrorReason::ExpectedSingleZero)),
         (b"00", Err(ErrorReason::ExpectedSingleZero)),
@@ -68,6 +74,7 @@ fn consume_integer() {
         (b"_", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"1_", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"_1", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1__", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"1_0", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"1_00", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"-1_00", Err(ErrorReason::IncorrectDigitGrouping)),
@@ -76,6 +83,7 @@ fn consume_integer() {
         (b"1_000_0", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"1_000_00", Err(ErrorReason::IncorrectDigitGrouping)),
         (b"1_000_0000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_0000_000", Err(ErrorReason::IncorrectDigitGrouping)),
     ] {
         let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
@@ -1877,12 +1885,10 @@ fn time() {
     }
 }
 
-// TODO: Test has_another_list_item
-
 #[test]
 fn list_missing_separator() {
     let mut decoder = Decoder::new(b"[TT]");
-    decoder.consume_open_list().unwrap();
+    decoder.consume_list_open().unwrap();
     assert_eq!(
         decoder.consume_bool().unwrap_err().reason,
         ErrorReason::ExpectedListSeparator
@@ -1892,10 +1898,10 @@ fn list_missing_separator() {
 #[test]
 fn list_list_missing_separator() {
     let mut decoder = Decoder::new(b"[[][]]");
-    decoder.consume_open_list().unwrap();
-    decoder.consume_open_list().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
     assert_eq!(
-        decoder.consume_close_list().unwrap_err().reason,
+        decoder.consume_list_close().unwrap_err().reason,
         ErrorReason::ExpectedListSeparator
     );
 }
@@ -1903,24 +1909,24 @@ fn list_list_missing_separator() {
 #[test]
 fn list_nested() {
     let mut decoder = Decoder::new(b"[[],[],[[T]]]");
-    decoder.consume_open_list().unwrap();
-    decoder.consume_open_list().unwrap();
-    decoder.consume_close_list().unwrap();
-    decoder.consume_open_list().unwrap();
-    decoder.consume_close_list().unwrap();
-    decoder.consume_open_list().unwrap();
-    decoder.consume_open_list().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
     assert_eq!(decoder.consume_bool(), Ok(true));
-    decoder.consume_close_list().unwrap();
-    decoder.consume_close_list().unwrap();
-    decoder.consume_close_list().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_close().unwrap();
     decoder.close().unwrap();
 }
 
 #[test]
 fn list_not_a_list() {
     assert_eq!(
-        Decoder::new(b"T").consume_open_list().unwrap_err().reason,
+        Decoder::new(b"T").consume_list_open().unwrap_err().reason,
         ErrorReason::ExpectedList
     );
 }
@@ -1928,11 +1934,42 @@ fn list_not_a_list() {
 #[test]
 fn list_string_string() {
     let mut decoder = Decoder::new(b"[\"a\",\"b\"]");
-    decoder.consume_open_list().unwrap();
+    decoder.consume_list_open().unwrap();
     assert_eq!(decoder.consume_string(), Ok("a".to_string()));
     assert_eq!(decoder.consume_string(), Ok("b".to_string()));
-    decoder.consume_close_list().unwrap();
+    decoder.consume_list_close().unwrap();
     decoder.close().unwrap();
+}
+
+#[test]
+fn list_has_next_item() {
+    let mut decoder = Decoder::new(b"[T,T]");
+    decoder.consume_list_open().unwrap();
+    assert!(decoder.has_another_list_item());
+    decoder.consume_bool().unwrap();
+    assert!(decoder.has_another_list_item());
+    decoder.consume_bool().unwrap();
+    assert!(!decoder.has_another_list_item());
+    decoder.consume_list_close().unwrap();
+    decoder.close().unwrap();
+}
+
+#[test]
+fn close_list_close_not_consumed() {
+    let mut decoder = Decoder::new(b"[]");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.close().unwrap_err().reason,
+        ErrorReason::ListCloseNotConsumed
+    );
+}
+
+#[test]
+fn close_data_not_consumed() {
+    assert_eq!(
+        Decoder::new(b"Y").close().unwrap_err().reason,
+        ErrorReason::DataNotConsumed
+    );
 }
 
 #[test]

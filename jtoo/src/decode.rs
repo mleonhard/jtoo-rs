@@ -64,7 +64,7 @@ pub enum ErrorReason {
     IncorrectDigitGrouping,
     IntegerTooLarge,
     InvalidEscapeSequence,
-    ListEndNotConsumed,
+    ListCloseNotConsumed,
     MalformedBool,
     MalformedDate,
     MalformedDateTimeTzOffset,
@@ -330,7 +330,7 @@ impl<'a> Decoder<'a> {
     /// Returns `Err` if the decoder has unconsumed data.
     pub fn close(self) -> Result<(), DecodeError> {
         if self.list_depth != 0 {
-            return Err(self.err(ErrorReason::ListEndNotConsumed));
+            return Err(self.err(ErrorReason::ListCloseNotConsumed));
         }
         if !self.bytes.is_empty() {
             return Err(self.err(ErrorReason::DataNotConsumed));
@@ -389,24 +389,16 @@ impl<'a> Decoder<'a> {
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not an integer, or the buffer is empty.
     pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
-        let mut sign = if self.consume_exact(b'-').is_some() {
+        let sign = if self.consume_exact(b'-').is_some() {
             -1
         } else {
             1
         };
-        let mut len = 0;
         let mut seen_underscore = false;
         let mut group_digit_count = 0u16;
         let mut value = 0i64;
         while let Some(b) = self.consume_byte() {
             match b {
-                b'-' => {
-                    if len == 0 {
-                        sign = -1;
-                    } else {
-                        return Err(self.err(ErrorReason::ExpectedInteger));
-                    }
-                }
                 b'0'..=b'9' => {
                     group_digit_count += 1;
                     let d = i64::from(b - b'0');
@@ -433,7 +425,6 @@ impl<'a> Decoder<'a> {
                 }
                 _ => break,
             }
-            len += 1;
         }
         if value == 0 && group_digit_count == 0 {
             return Err(self.err(ErrorReason::ExpectedInteger));
@@ -453,7 +444,7 @@ impl<'a> Decoder<'a> {
 
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not an open list symbol `[`, or the buffer is empty.
-    pub fn consume_open_list(&mut self) -> Result<(), DecodeError> {
+    pub fn consume_list_open(&mut self) -> Result<(), DecodeError> {
         self.consume_exact(b'[')
             .ok_or_else(|| self.err(ErrorReason::ExpectedList))?;
         self.list_depth += 1;
@@ -507,7 +498,7 @@ impl<'a> Decoder<'a> {
 
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not a close list symbol `]`, or the buffer is empty.
-    pub fn consume_close_list(&mut self) -> Result<(), DecodeError> {
+    pub fn consume_list_close(&mut self) -> Result<(), DecodeError> {
         if self.list_depth == 0 {
             return Err(self.err(ErrorReason::NotInList));
         }
