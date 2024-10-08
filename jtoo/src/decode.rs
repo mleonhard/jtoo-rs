@@ -6,6 +6,7 @@ pub enum ErrorReason {
     DataNotConsumed,
     DayOutOfRange,
     ExpectedBool,
+    ExpectedByteString,
     ExpectedDateOrTime,
     ExpectedInteger,
     ExpectedList,
@@ -20,6 +21,7 @@ pub enum ErrorReason {
     InvalidEscapeSequence,
     ListCloseNotConsumed,
     MalformedBool,
+    MalformedByteString,
     MalformedDate,
     MalformedDateTimeTzOffset,
     MalformedInteger,
@@ -36,6 +38,7 @@ pub enum ErrorReason {
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
+    UppercaseHexNotAllowedInByteString,
     WeekOutOfRange,
     YearOutOfRange,
     ZeroTimeZoneMinutesShouldBeOmitted,
@@ -321,6 +324,34 @@ impl<'a> Decoder<'a> {
 
     fn consume_bytes(&mut self, n: usize) {
         self.bytes = &self.bytes[n..];
+    }
+
+    pub fn consume_byte_string(&mut self) -> Result<Vec<u8>, DecodeError> {
+        self.consume_exact(b'B')
+            .ok_or_else(|| self.err(ErrorReason::ExpectedByteString))?;
+        let mut result = Vec::new();
+        loop {
+            let d0 = match self.consume_byte() {
+                Some(b) if (b'0'..=b'9').contains(&b) => b - b'0',
+                Some(b) if (b'a'..=b'f').contains(&b) => 10 + b - b'a',
+                Some(b) if (b'A'..=b'F').contains(&b) => {
+                    return Err(self.err(ErrorReason::UppercaseHexNotAllowedInByteString))
+                }
+                _ => break,
+            };
+            let d1 = match self.consume_byte() {
+                Some(b) if (b'0'..=b'9').contains(&b) => b - b'0',
+                Some(b) if (b'a'..=b'f').contains(&b) => 10 + b - b'a',
+                Some(b) if (b'A'..=b'F').contains(&b) => {
+                    return Err(self.err(ErrorReason::UppercaseHexNotAllowedInByteString))
+                }
+                _ => return Err(self.err(ErrorReason::MalformedByteString)),
+            };
+            let b = (d0 << 4) | d1;
+            result.push(b);
+        }
+        self.close_item(ErrorReason::MalformedByteString)?;
+        Ok(result)
     }
 
     fn consume_exact(&mut self, c: u8) -> Option<()> {

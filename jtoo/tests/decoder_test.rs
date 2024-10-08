@@ -30,6 +30,44 @@ fn consume_bool() {
 }
 
 #[test]
+fn consume_byte_string() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(ErrorReason::ExpectedByteString)),
+        (b"B0".as_slice(), Err(ErrorReason::MalformedByteString)),
+        (b"B0g".as_slice(), Err(ErrorReason::MalformedByteString)),
+        (
+            b"BA0".as_slice(),
+            Err(ErrorReason::UppercaseHexNotAllowedInByteString),
+        ),
+        (
+            b"B0A".as_slice(),
+            Err(ErrorReason::UppercaseHexNotAllowedInByteString),
+        ),
+        (b"B".as_slice(), Ok(vec![])),
+        (b"B00".as_slice(), Ok(vec![0])),
+        (b"Bff".as_slice(), Ok(vec![0xff])),
+        (
+            b"Bf0e1d2c3b4a5968778695a4b3c2d1e0f".as_slice(),
+            Ok(vec![
+                0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b, 0x3c, 0x2d,
+                0x1e, 0x0f,
+            ]),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        let result = decoder.consume_byte_string();
+        match expected {
+            Ok(expected_value) => {
+                assert_eq!(result, Ok(expected_value), "{msg}",);
+                decoder.close().expect(&msg);
+            }
+            Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason),
+        }
+    }
+}
+
+#[test]
 fn consume_integer() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedInteger)),
