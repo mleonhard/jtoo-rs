@@ -209,6 +209,10 @@ impl Encoder {
         }
     }
 
+    fn append_digit(&mut self, d: u8) {
+        self.string.push(Self::DIGITS[d as usize]);
+    }
+
     fn append_2_digits(&mut self, value: u8) {
         let d1 = value % 10;
         let d0 = value / 10;
@@ -249,7 +253,7 @@ impl Encoder {
             return Err(EncodeError::InvalidWeekday);
         }
         self.string.push('-');
-        self.append_2_digits(weekday);
+        self.append_digit(weekday);
         Ok(())
     }
 

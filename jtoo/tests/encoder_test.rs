@@ -552,8 +552,8 @@ fn year_week() {
 fn year_week_weekday() {
     for (weekday, expected) in [
         (0, Err(EncodeError::InvalidWeekday)),
-        (1, Ok("D2021-W02-01")),
-        (7, Ok("D2021-W02-07")),
+        (1, Ok("D2021-W02-1")),
+        (7, Ok("D2021-W02-7")),
         (8, Err(EncodeError::InvalidWeekday)),
         (u8::MAX, Err(EncodeError::InvalidWeekday)),
     ] {

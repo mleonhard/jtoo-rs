@@ -647,6 +647,20 @@ impl<'a> Decoder<'a> {
         Ok(d)
     }
 
+    fn consume_week_day(&mut self) -> Result<u8, DecodeError> {
+        self.consume_exact(b'-')
+            .ok_or_else(|| self.err(ErrorReason::ExpectedDay))?;
+        let d = self.consume_date_digit()?;
+        match self.bytes.first().copied() {
+            Some(b'T' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
+            _ => return Err(self.err(ErrorReason::MalformedDate)),
+        }
+        if !(1..=7).contains(&d) {
+            return Err(self.err(ErrorReason::DayOutOfRange));
+        }
+        Ok(d)
+    }
+
     fn consume_date(&mut self) -> Result<Date, DecodeError> {
         enum MonthOrWeek {
             Month(u8),
@@ -667,10 +681,15 @@ impl<'a> Decoder<'a> {
                 MonthOrWeek::Week(w) => Ok(Date::YearWeek { y, w }),
             };
         }
-        let d = self.consume_day()?;
         match month_or_week {
-            MonthOrWeek::Month(mo) => Ok(Date::YearMonthDay { y, mo, d }),
-            MonthOrWeek::Week(w) => Ok(Date::YearWeekDay { y, w, d }),
+            MonthOrWeek::Month(mo) => {
+                let d = self.consume_day()?;
+                Ok(Date::YearMonthDay { y, mo, d })
+            }
+            MonthOrWeek::Week(w) => {
+                let d = self.consume_week_day()?;
+                Ok(Date::YearWeekDay { y, w, d })
+            }
         }
     }
 

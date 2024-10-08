@@ -467,14 +467,10 @@ fn consume_date_time_tz_offset() {
         (b"D9999-W08-", Err(ErrorReason::MalformedDate)),
         (b"D9999-W08-x", Err(ErrorReason::MalformedDate)),
         (b"D9999-W08-T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W08-0", Err(ErrorReason::MalformedDate)),
         (b"D9999-W08-0x", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W08-0T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W08-01x", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W08-01T", Err(ErrorReason::MalformedTime)),
-        (b"D9999-W08-00", Err(ErrorReason::DayOutOfRange)),
+        (b"D9999-W08-0", Err(ErrorReason::DayOutOfRange)),
         (
-            b"D9999-W08-01",
+            b"D9999-W08-1",
             Ok(DateTimeTzOffset::Date(Date::YearWeekDay {
                 y: 9999,
                 w: 8,
@@ -482,14 +478,14 @@ fn consume_date_time_tz_offset() {
             })),
         ),
         (
-            b"D9999-W08-31",
+            b"D9999-W08-7",
             Ok(DateTimeTzOffset::Date(Date::YearWeekDay {
                 y: 9999,
                 w: 8,
-                d: 31,
+                d: 7,
             })),
         ),
-        (b"D9999-W08-32", Err(ErrorReason::DayOutOfRange)),
+        (b"D9999-W08-8", Err(ErrorReason::DayOutOfRange)),
         // Hour ///////////////////////////////////////////////////////////////////////////////////
         (b"D9999-08-07T", Err(ErrorReason::MalformedTime)),
         (b"T", Err(ErrorReason::MalformedTime)),
@@ -1816,7 +1812,7 @@ fn date() {
             Some(7),
         ),
         (
-            b"D9999-W08-07".as_slice(),
+            b"D9999-W08-7".as_slice(),
             Some(9999),
             None,
             Some(8),
