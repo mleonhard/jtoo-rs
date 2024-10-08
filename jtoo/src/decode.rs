@@ -6,59 +6,13 @@ pub enum ErrorReason {
     DataNotConsumed,
     DayOutOfRange,
     ExpectedBool,
-    ExpectedDate,
     ExpectedDateOrTime,
-    ExpectedDay,
-    ExpectedHour,
     ExpectedInteger,
     ExpectedList,
     ExpectedListEnd,
     ExpectedListSeparator,
-    ExpectedMicrosecond,
-    ExpectedMillisecond,
-    ExpectedMinute,
-    ExpectedMonth,
-    ExpectedNanosecond,
-    ExpectedSecond,
     ExpectedSingleZero,
     ExpectedString,
-    ExpectedTime,
-    ExpectedTzOffset,
-    ExpectedWeek,
-    ExpectedYear,
-    ExpectedYearMonth,
-    ExpectedYearMonthDay,
-    ExpectedYearMonthDayHour,
-    ExpectedYearMonthDayHourMinute,
-    ExpectedYearMonthDayHourMinuteMicrosecond,
-    ExpectedYearMonthDayHourMinuteMicrosecondTzOffset,
-    ExpectedYearMonthDayHourMinuteMillisecond,
-    ExpectedYearMonthDayHourMinuteMillisecondTzOffset,
-    ExpectedYearMonthDayHourMinuteNanosecond,
-    ExpectedYearMonthDayHourMinuteNanosecondTzOffset,
-    ExpectedYearMonthDayHourMinuteSecond,
-    ExpectedYearMonthDayHourMinuteSecondTzOffset,
-    ExpectedYearMonthDayHourMinuteTzOffset,
-    ExpectedYearMonthDayHourTzOffset,
-    ExpectedYearMonthDayTzOffset,
-    ExpectedYearMonthTzOffset,
-    ExpectedYearTzOffset,
-    ExpectedYearWeek,
-    ExpectedYearWeekDay,
-    ExpectedYearWeekDayHour,
-    ExpectedYearWeekDayHourMinute,
-    ExpectedYearWeekDayHourMinuteMicrosecond,
-    ExpectedYearWeekDayHourMinuteMicrosecondTzOffset,
-    ExpectedYearWeekDayHourMinuteMillisecond,
-    ExpectedYearWeekDayHourMinuteMillisecondTzOffset,
-    ExpectedYearWeekDayHourMinuteNanosecond,
-    ExpectedYearWeekDayHourMinuteNanosecondTzOffset,
-    ExpectedYearWeekDayHourMinuteSecond,
-    ExpectedYearWeekDayHourMinuteSecondTzOffset,
-    ExpectedYearWeekDayHourMinuteTzOffset,
-    ExpectedYearWeekDayHourTzOffset,
-    ExpectedYearWeekDayTzOffset,
-    ExpectedYearWeekTzOffset,
     HourOutOfRange,
     IncompleteEscapeSequence,
     IncorrectDigitGrouping,
@@ -70,17 +24,11 @@ pub enum ErrorReason {
     MalformedDateTimeTzOffset,
     MalformedInteger,
     MalformedListEnd,
-    MalformedMonth,
     MalformedString,
     MalformedTime,
     MalformedTimeZoneOffset,
-    MalformedWeek,
-    MalformedYear,
-    MicrosecondOutOfRange,
-    MillisecondOutOfRange,
     MinuteOutOfRange,
     MonthOutOfRange,
-    NanosecondOutOfRange,
     NegativeZero,
     NotInList,
     NotUtf8,
@@ -88,8 +36,6 @@ pub enum ErrorReason {
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
-    UnconsumedData,
-    Unimplemented,
     WeekOutOfRange,
     YearOutOfRange,
     ZeroTimeZoneMinutesShouldBeOmitted,
@@ -571,17 +517,11 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_year(&mut self) -> Result<u16, DecodeError> {
-        if self.consume_byte() != Some(b'D') {
-            return Err(self.err(ErrorReason::ExpectedYear));
-        }
+        assert_eq!(self.consume_byte(), Some(b'D'));
         let d0 = u16::from(self.consume_date_digit()?);
         let d1 = u16::from(self.consume_date_digit()?);
         let d2 = u16::from(self.consume_date_digit()?);
         let d3 = u16::from(self.consume_date_digit()?);
-        match self.bytes.first().copied() {
-            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
         let y = 1000 * d0 + 100 * d1 + 10 * d2 + d3;
         if !(1..=9999).contains(&y) {
             return Err(self.err(ErrorReason::YearOutOfRange));
@@ -590,19 +530,9 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_month(&mut self) -> Result<u8, DecodeError> {
-        self.consume_exact(b'-')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedMonth))?;
-        match self.bytes.first().copied() {
-            None => return Err(self.err(ErrorReason::MalformedDate)),
-            Some(b'W') => return Err(self.err(ErrorReason::ExpectedMonth)),
-            _ => {}
-        }
+        assert_eq!(self.consume_byte(), Some(b'-'));
         let d0 = self.consume_date_digit()?;
         let d1 = self.consume_date_digit()?;
-        match self.bytes.first().copied() {
-            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
         let mo = 10 * d0 + d1;
         if !(1..=12).contains(&mo) {
             return Err(self.err(ErrorReason::MonthOutOfRange));
@@ -611,19 +541,10 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_week(&mut self) -> Result<u8, DecodeError> {
-        self.consume_exact(b'-')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedWeek))?;
-        match self.consume_byte() {
-            Some(b'W') => {}
-            Some(b'0'..=b'9') => return Err(self.err(ErrorReason::ExpectedWeek)),
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
+        assert_eq!(self.consume_byte(), Some(b'-'));
+        assert_eq!(self.consume_byte(), Some(b'W'));
         let d0 = self.consume_date_digit()?;
         let d1 = self.consume_date_digit()?;
-        match self.bytes.first().copied() {
-            Some(b'-' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
         let w = 10 * d0 + d1;
         if !(1..=53).contains(&w) {
             return Err(self.err(ErrorReason::WeekOutOfRange));
@@ -632,14 +553,9 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_day(&mut self) -> Result<u8, DecodeError> {
-        self.consume_exact(b'-')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedDay))?;
+        assert_eq!(self.consume_byte(), Some(b'-'));
         let d0 = self.consume_date_digit()?;
         let d1 = self.consume_date_digit()?;
-        match self.bytes.first().copied() {
-            Some(b'T' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
         let d = 10 * d0 + d1;
         if !(1..=31).contains(&d) {
             return Err(self.err(ErrorReason::DayOutOfRange));
@@ -648,13 +564,8 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_week_day(&mut self) -> Result<u8, DecodeError> {
-        self.consume_exact(b'-')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedDay))?;
+        assert_eq!(self.consume_byte(), Some(b'-'));
         let d = self.consume_date_digit()?;
-        match self.bytes.first().copied() {
-            Some(b'T' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedDate)),
-        }
         if !(1..=7).contains(&d) {
             return Err(self.err(ErrorReason::DayOutOfRange));
         }
@@ -694,15 +605,9 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_hour(&mut self) -> Result<u8, DecodeError> {
-        if self.consume_byte() != Some(b'T') {
-            return Err(self.err(ErrorReason::ExpectedHour));
-        }
+        assert_eq!(self.consume_byte(), Some(b'T'));
         let d0 = self.consume_time_digit()?;
         let d1 = self.consume_time_digit()?;
-        match self.bytes.first().copied() {
-            Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTime)),
-        }
         let h = 10 * d0 + d1;
         if !(0..=23).contains(&h) {
             return Err(self.err(ErrorReason::HourOutOfRange));
@@ -711,15 +616,9 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_minute(&mut self) -> Result<u8, DecodeError> {
-        if self.consume_byte() != Some(b':') {
-            return Err(self.err(ErrorReason::ExpectedMinute));
-        }
+        assert_eq!(self.consume_byte(), Some(b':'));
         let d0 = self.consume_time_digit()?;
         let d1 = self.consume_time_digit()?;
-        match self.bytes.first().copied() {
-            Some(b':' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTime)),
-        }
         let m = 10 * d0 + d1;
         if !(0..=59).contains(&m) {
             return Err(self.err(ErrorReason::MinuteOutOfRange));
@@ -728,15 +627,9 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_second(&mut self) -> Result<u8, DecodeError> {
-        if self.consume_byte() != Some(b':') {
-            return Err(self.err(ErrorReason::ExpectedSecond));
-        }
+        assert_eq!(self.consume_byte(), Some(b':'));
         let d0 = self.consume_time_digit()?;
         let d1 = self.consume_time_digit()?;
-        match self.bytes.first().copied() {
-            Some(b'.' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTime)),
-        }
         let s = 10 * d0 + d1;
         if !(0..=60).contains(&s) {
             return Err(self.err(ErrorReason::SecondOutOfRange));
@@ -745,39 +638,25 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_millisecond(&mut self) -> Result<u16, DecodeError> {
-        if self.consume_byte() != Some(b'.') {
-            return Err(self.err(ErrorReason::ExpectedMillisecond));
-        }
+        assert_eq!(self.consume_byte(), Some(b'.'));
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
-        match self.bytes.first().copied() {
-            Some(b'_' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTime)),
-        }
         let ms = 100 * d0 + 10 * d1 + d2;
         Ok(ms)
     }
 
     fn consume_microsecond(&mut self) -> Result<u32, DecodeError> {
-        if self.consume_byte() != Some(b'_') {
-            return Err(self.err(ErrorReason::ExpectedMicrosecond));
-        }
+        assert_eq!(self.consume_byte(), Some(b'_'));
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
-        match self.bytes.first().copied() {
-            Some(b'_' | b'Z' | b'+' | b'~' | b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTime)),
-        }
         let us = 100 * d0 + 10 * d1 + d2;
         Ok(u32::from(us))
     }
 
     fn consume_nanosecond(&mut self) -> Result<u64, DecodeError> {
-        if self.consume_byte() != Some(b'_') {
-            return Err(self.err(ErrorReason::ExpectedNanosecond));
-        }
+        assert_eq!(self.consume_byte(), Some(b'_'));
         let d0 = u64::from(self.consume_time_digit()?);
         let d1 = u64::from(self.consume_time_digit()?);
         let d2 = u64::from(self.consume_time_digit()?);
@@ -814,10 +693,8 @@ impl<'a> Decoder<'a> {
         Ok(Time::HourMinuteNanosecond { h, m, ns })
     }
 
-    fn consume_tz_offset(&mut self, reason: ErrorReason) -> Result<TzOffset, DecodeError> {
+    fn consume_tz_offset(&mut self) -> Result<TzOffset, DecodeError> {
         let sign = match self.consume_byte() {
-            Some(b'-' | b'T' | b':' | b'.' | b'_') => return Err(self.err(reason)),
-            Some(b',' | b']') | None => return Err(self.err(ErrorReason::ExpectedTzOffset)),
             Some(b'Z') => {
                 return Ok(TzOffset { h: 0, m: 0 });
             }
@@ -833,20 +710,15 @@ impl<'a> Decoder<'a> {
         }
         match self.bytes.first().copied() {
             Some(b':') => self.consume_byte(),
-            Some(b',' | b']') | None => {
+            _ => {
                 if h == 0 {
                     return Err(self.err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ));
                 }
                 return Ok(TzOffset { h, m: 0 });
             }
-            _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
         };
         let d0 = self.consume_tz_offset_digit()?;
         let d1 = self.consume_tz_offset_digit()?;
-        match self.bytes.first().copied() {
-            Some(b',' | b']') | None => {}
-            _ => return Err(self.err(ErrorReason::MalformedTimeZoneOffset)),
-        }
         let m = 10 * d0 + d1;
         if !(0..=59).contains(&m) {
             Err(self.err(ErrorReason::TimezoneOffsetMinuteOutOfRange))
@@ -885,7 +757,7 @@ impl<'a> Decoder<'a> {
         }
         let opt_tz_offset = match self.bytes.first() {
             None | Some(&b',' | &b']') => None,
-            _ => Some(self.consume_tz_offset(ErrorReason::ExpectedTzOffset)?),
+            _ => Some(self.consume_tz_offset()?),
         };
         self.close_item(ErrorReason::MalformedDateTimeTzOffset)?;
         match (opt_date, opt_time, opt_tz_offset) {

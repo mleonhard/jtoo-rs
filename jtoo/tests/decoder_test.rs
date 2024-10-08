@@ -150,17 +150,29 @@ fn consume_date_time_tz_offset() {
         (b"".as_slice(), Err(ErrorReason::ExpectedDateOrTime)),
         (b"Z", Err(ErrorReason::ExpectedDateOrTime)),
         (b"!", Err(ErrorReason::ExpectedDateOrTime)),
+        (b"D2024T01", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D2024-01T01", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D2024-W01T01", Err(ErrorReason::MalformedDateTimeTzOffset)),
         // Year ///////////////////////////////////////////////////////////////////////////////////
+        (b"D", Err(ErrorReason::MalformedDate)),
+        (b"Dx", Err(ErrorReason::MalformedDate)),
+        (b"DT", Err(ErrorReason::MalformedDate)),
         (b"D1", Err(ErrorReason::MalformedDate)),
+        (b"D1x", Err(ErrorReason::MalformedDate)),
+        (b"D1Z", Err(ErrorReason::MalformedDate)),
         (b"D11", Err(ErrorReason::MalformedDate)),
+        (b"D11x", Err(ErrorReason::MalformedDate)),
+        (b"D11Z", Err(ErrorReason::MalformedDate)),
         (b"D111", Err(ErrorReason::MalformedDate)),
         (b"D111x", Err(ErrorReason::MalformedDate)),
+        (b"D111Z", Err(ErrorReason::MalformedDate)),
+        (b"D0000", Err(ErrorReason::YearOutOfRange)),
         (b"D0001", Ok(DateTimeTzOffset::Date(Date::Year { y: 1 }))),
         (b"D2029", Ok(DateTimeTzOffset::Date(Date::Year { y: 2029 }))),
         (b"D9999", Ok(DateTimeTzOffset::Date(Date::Year { y: 9999 }))),
-        (b"D10000", Err(ErrorReason::MalformedDate)),
-        (b"D9999x", Err(ErrorReason::MalformedDate)),
-        (b"D9999T", Err(ErrorReason::MalformedDate)),
+        (b"D10000", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D9999x", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D9999T", Err(ErrorReason::MalformedTime)),
         // Year + TzOffset Hour ///////////////////////////////////////////////////////////////////
         (
             b"D9999Z",
@@ -208,16 +220,18 @@ fn consume_date_time_tz_offset() {
         (b"D9999+24", Err(ErrorReason::TimezoneOffsetHourOutOfRange)),
         (b"D9999~24", Err(ErrorReason::TimezoneOffsetHourOutOfRange)),
         // Year + TzOffset Minute /////////////////////////////////////////////////////////////////
-        (b"D9999+08x", Err(ErrorReason::MalformedTimeZoneOffset)),
-        (b"D9999~08x", Err(ErrorReason::MalformedTimeZoneOffset)),
-        (b"D9999+08T", Err(ErrorReason::MalformedTimeZoneOffset)),
-        (b"D9999~08T", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D9999+08x", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D9999~08x", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D9999+08T", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D9999~08T", Err(ErrorReason::MalformedDateTimeTzOffset)),
         (b"D9999+08:", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999~08:", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999+08:0", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999~08:0", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999+08:0x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999~08:0x", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D9999+08:07x", Err(ErrorReason::MalformedDateTimeTzOffset)),
+        (b"D9999~08:07x", Err(ErrorReason::MalformedDateTimeTzOffset)),
         (
             b"D9999+00:00",
             Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
@@ -277,7 +291,7 @@ fn consume_date_time_tz_offset() {
         (b"D9999-0", Err(ErrorReason::MalformedDate)),
         (b"D9999-0x", Err(ErrorReason::MalformedDate)),
         (b"D9999-0T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-08x", Err(ErrorReason::MalformedDate)),
+        (b"D9999-08x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999-00", Err(ErrorReason::MonthOutOfRange)),
         (
             b"D9999-01",
@@ -332,8 +346,8 @@ fn consume_date_time_tz_offset() {
         (b"D9999-W0", Err(ErrorReason::MalformedDate)),
         (b"D9999-W0x", Err(ErrorReason::MalformedDate)),
         (b"D9999-W0T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W01x", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W01T", Err(ErrorReason::MalformedDate)),
+        (b"D9999-W01x", Err(ErrorReason::MalformedTimeZoneOffset)),
+        (b"D9999-W01T", Err(ErrorReason::MalformedTime)),
         (b"D9999-W00", Err(ErrorReason::WeekOutOfRange)),
         (
             b"D9999-W01",
@@ -387,7 +401,7 @@ fn consume_date_time_tz_offset() {
         (b"D9999-08-0", Err(ErrorReason::MalformedDate)),
         (b"D9999-08-0x", Err(ErrorReason::MalformedDate)),
         (b"D9999-08-0T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-08-01x", Err(ErrorReason::MalformedDate)),
+        (b"D9999-08-01x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999-08-01T", Err(ErrorReason::MalformedTime)),
         (b"D9999-08-00", Err(ErrorReason::DayOutOfRange)),
         (
@@ -467,7 +481,7 @@ fn consume_date_time_tz_offset() {
         (b"D9999-W08-", Err(ErrorReason::MalformedDate)),
         (b"D9999-W08-x", Err(ErrorReason::MalformedDate)),
         (b"D9999-W08-T", Err(ErrorReason::MalformedDate)),
-        (b"D9999-W08-0x", Err(ErrorReason::MalformedDate)),
+        (b"D9999-W08-1x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (b"D9999-W08-0", Err(ErrorReason::DayOutOfRange)),
         (
             b"D9999-W08-1",
@@ -499,8 +513,11 @@ fn consume_date_time_tz_offset() {
         (b"T0x", Err(ErrorReason::MalformedTime)),
         (b"D9999-08-07T0Z", Err(ErrorReason::MalformedTime)),
         (b"T0Z", Err(ErrorReason::MalformedTime)),
-        (b"D9999-08-07T12x", Err(ErrorReason::MalformedTime)),
-        (b"T12x", Err(ErrorReason::MalformedTime)),
+        (
+            b"D9999-08-07T12x",
+            Err(ErrorReason::MalformedTimeZoneOffset),
+        ),
+        (b"T12x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (
             b"D9999-08-07T01",
             Ok(DateTimeTzOffset::DateTime(
@@ -636,8 +653,11 @@ fn consume_date_time_tz_offset() {
         (b"T06:0x", Err(ErrorReason::MalformedTime)),
         (b"D9999-08-07T06:0Z", Err(ErrorReason::MalformedTime)),
         (b"T06:0Z", Err(ErrorReason::MalformedTime)),
-        (b"D9999-08-07T06:00x", Err(ErrorReason::MalformedTime)),
-        (b"T06:00x", Err(ErrorReason::MalformedTime)),
+        (
+            b"D9999-08-07T06:00x",
+            Err(ErrorReason::MalformedTimeZoneOffset),
+        ),
+        (b"T06:00x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (
             b"D9999-08-07T06:01",
             Ok(DateTimeTzOffset::DateTime(
@@ -779,8 +799,11 @@ fn consume_date_time_tz_offset() {
         (b"T06:05:0x", Err(ErrorReason::MalformedTime)),
         (b"D9999-08-07T06:05:0Z", Err(ErrorReason::MalformedTime)),
         (b"T06:05:0Z", Err(ErrorReason::MalformedTime)),
-        (b"D9999-08-07T06:05:00x", Err(ErrorReason::MalformedTime)),
-        (b"T06:05:00x", Err(ErrorReason::MalformedTime)),
+        (
+            b"D9999-08-07T06:05:00x",
+            Err(ErrorReason::MalformedTimeZoneOffset),
+        ),
+        (b"T06:05:00x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (
             b"D9999-08-07T06:05:00",
             Ok(DateTimeTzOffset::DateTime(
@@ -938,14 +961,14 @@ fn consume_date_time_tz_offset() {
         (b"T06:05:04.00Z", Err(ErrorReason::MalformedTime)),
         (
             b"D9999-08-07T06:05:04.000x",
-            Err(ErrorReason::MalformedTime),
+            Err(ErrorReason::MalformedTimeZoneOffset),
         ),
-        (b"T06:05:04.000x", Err(ErrorReason::MalformedTime)),
+        (b"T06:05:04.000x", Err(ErrorReason::MalformedTimeZoneOffset)),
         (
             b"D9999-08-07T06:05:04.0000",
-            Err(ErrorReason::MalformedTime),
+            Err(ErrorReason::MalformedTimeZoneOffset),
         ),
-        (b"T06:05:04.0000", Err(ErrorReason::MalformedTime)),
+        (b"T06:05:04.0000", Err(ErrorReason::MalformedTimeZoneOffset)),
         (
             b"D9999-08-07T06:05:00.000",
             Ok(DateTimeTzOffset::DateTime(
@@ -1223,14 +1246,20 @@ fn consume_date_time_tz_offset() {
         (b"T06:05:04.333_00Z", Err(ErrorReason::MalformedTime)),
         (
             b"D9999-08-07T06:05:04.333_000x",
-            Err(ErrorReason::MalformedTime),
+            Err(ErrorReason::MalformedTimeZoneOffset),
         ),
-        (b"T06:05:04.333_000x", Err(ErrorReason::MalformedTime)),
+        (
+            b"T06:05:04.333_000x",
+            Err(ErrorReason::MalformedTimeZoneOffset),
+        ),
         (
             b"D9999-08-07T06:05:04.333_0000",
-            Err(ErrorReason::MalformedTime),
+            Err(ErrorReason::MalformedTimeZoneOffset),
         ),
-        (b"T06:05:04.333_0000", Err(ErrorReason::MalformedTime)),
+        (
+            b"T06:05:04.333_0000",
+            Err(ErrorReason::MalformedTimeZoneOffset),
+        ),
         (
             b"D9999-08-07T06:05:00.000_000",
             Ok(DateTimeTzOffset::DateTime(
@@ -1957,6 +1986,25 @@ fn close_list_close_not_consumed() {
     assert_eq!(
         decoder.close().unwrap_err().reason,
         ErrorReason::ListCloseNotConsumed
+    );
+}
+
+#[test]
+fn not_in_list() {
+    let mut decoder = Decoder::new(b"T");
+    assert_eq!(
+        decoder.consume_list_close().unwrap_err().reason,
+        ErrorReason::NotInList
+    );
+}
+
+#[test]
+fn expected_list_end() {
+    let mut decoder = Decoder::new(b"[");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.consume_list_close().unwrap_err().reason,
+        ErrorReason::ExpectedListEnd
     );
 }
 

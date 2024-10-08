@@ -10,7 +10,6 @@ pub enum EncodeError {
     UnclosedByteString,
     UnclosedList,
     UnclosedString,
-    InvalidDecimal,
     InvalidTimestamp,
     InvalidYear,
     InvalidMonth,
