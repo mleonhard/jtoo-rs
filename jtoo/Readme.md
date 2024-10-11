@@ -9,14 +9,12 @@ A Rust library for serializing and deserializing the [JTOO data format](https://
 
 # Features
 - `forbid(unsafe_code)`
-- No dependencies
-- Good test coverage (NN%)
+- Minimal dependencies
+- Good test coverage (97%)
 
 # Limitations
 - New, not proven in production.
-- To do:
-    - Pack trait
-    - Unpack trait
+- Todo:
     - Derive Pack trait
     - Derive Unpack trait
     - Support interned strings
