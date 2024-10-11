@@ -326,6 +326,9 @@ impl<'a> Decoder<'a> {
         self.bytes = &self.bytes[n..];
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a byte string, or the buffer is empty.
+    #[allow(clippy::manual_is_ascii_check)]
     pub fn consume_byte_string(&mut self) -> Result<Vec<u8>, DecodeError> {
         self.consume_exact(b'B')
             .ok_or_else(|| self.err(ErrorReason::ExpectedByteString))?;
@@ -739,15 +742,14 @@ impl<'a> Decoder<'a> {
         if !(-23..=23).contains(&h) {
             return Err(self.err(ErrorReason::TimezoneOffsetHourOutOfRange));
         }
-        match self.bytes.first().copied() {
-            Some(b':') => self.consume_byte(),
-            _ => {
-                if h == 0 {
-                    return Err(self.err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ));
-                }
-                return Ok(TzOffset { h, m: 0 });
+        if self.bytes.first().copied() == Some(b':') {
+            self.consume_byte();
+        } else {
+            if h == 0 {
+                return Err(self.err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ));
             }
-        };
+            return Ok(TzOffset { h, m: 0 });
+        }
         let d0 = self.consume_tz_offset_digit()?;
         let d1 = self.consume_tz_offset_digit()?;
         let m = 10 * d0 + d1;
