@@ -3,4 +3,5 @@ resolver = "2"
 members = [
     "jtoo",
     "jtoo_derive",
+    "jtoo_derive_impl",
 ]

@@ -1,13 +1,15 @@
 [package]
 authors = ["Michael Leonhard <michael@leonhardllc.com>"]
 categories = ["network-programming"]
-description = "Rust library for serializing and deserializing the JTOO data format"
+description = "Derive macro for the `jtoo` crate"
 edition = "2021"
 keywords = ["jtoo", "htoo", "json"]
 license = "MIT OR Apache-2.0"
-name = "jtoo"
+name = "jtoo_derive_impl"
 repository = "https://github.com/mleonhard/jtoo-rs"
 version = "0.1.0"
 
 [dependencies]
-jtoo_derive = { version = "0.1", path = "../jtoo_derive" }
+proc-macro2 = { version = "1", features = ["proc-macro"] }
+quote = { version = "1", features = ["proc-macro"] }
+syn = { version = "2", features = ["derive", "parsing", "printing", "proc-macro"] }

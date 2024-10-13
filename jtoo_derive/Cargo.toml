@@ -14,7 +14,6 @@ proc-macro = true
 path = "src/lib.rs"
 
 [dependencies]
-safe-proc-macro2 = { version = "1.0.67", features = ["proc-macro"] }
-safe-quote = { version = "1.0.15", features = ["proc-macro"] }
-# ["clone-impls", "derive", "parsing", "printing"]
-syn = { version = "2.0.71", features = ["proc-macro"] }
+jtoo_derive_impl = { version = "0.1", path = "../jtoo_derive_impl" }
+proc-macro2 = "1"
+syn = "2.0.71"
