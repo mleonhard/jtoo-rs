@@ -44,10 +44,14 @@
 //! - v0.1.0 - Initial version.
 #![forbid(unsafe_code)]
 
+mod date_time_offset;
 mod decode;
+mod decoder;
 mod encode;
 
+pub use date_time_offset::*;
 pub use decode::*;
+pub use decoder::*;
 pub use encode::*;
 
 /// Converts a byte slice into a string using
