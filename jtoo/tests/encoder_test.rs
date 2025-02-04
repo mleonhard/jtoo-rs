@@ -502,591 +502,142 @@ fn timestamp_nanoseconds() {
 }
 
 #[test]
-fn year() {
-    for (year, expected) in [
-        (0, Err(EncodeError::InvalidYear)),
-        (1, Ok("D1")),
-        (1000, Ok("D1000")),
-        (2024, Ok("D2024")),
-        (9999, Ok("D9999")),
-        (10000, Err(EncodeError::InvalidYear)),
-        (u16::MAX, Err(EncodeError::InvalidYear)),
+fn append_date_time_offset() {
+    for (
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        nanosecond,
+        offset_hour,
+        offset_minute,
+        expected,
+    ) in [
+        (0, 1, 1, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidYear)),
+        (10000, 1, 1, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidYear)),
+        (1, 0, 1, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidMonth)),
+        (1, 13, 1, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidMonth)),
+        (1, 1, 0, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidDay)),
+        (1, 1, 32, 0, 0, 0, 0, 0, 0, Err(EncodeError::InvalidDay)),
+        (1, 1, 1, 24, 0, 0, 0, 0, 0, Err(EncodeError::InvalidHour)),
+        (1, 1, 1, 0, 60, 0, 0, 0, 0, Err(EncodeError::InvalidMinute)),
+        (1, 1, 1, 0, 0, 61, 0, 0, 0, Err(EncodeError::InvalidSecond)),
+        (
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            1_000_000_000,
+            0,
+            0,
+            Err(EncodeError::InvalidNanosecond),
+        ),
+        (1, 1, 1, 0, 0, 0, 0, -24, 0, Err(EncodeError::InvalidOffset)),
+        (1, 1, 1, 0, 0, 0, 0, 24, 0, Err(EncodeError::InvalidOffset)),
+        (1, 1, 1, 0, 0, 0, 0, 0, 60, Err(EncodeError::InvalidOffset)),
+        (1, 1, 1, 0, 0, 0, 0, 0, 0, Ok("D0001-01-01T00:00:00Z")),
+        (
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            123_000_000,
+            0,
+            0,
+            Ok("D0001-01-01T00:00:00.123Z"),
+        ),
+        (
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            123_456_000,
+            0,
+            0,
+            Ok("D0001-01-01T00:00:00.123_456Z"),
+        ),
+        (
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            123_456_789,
+            0,
+            0,
+            Ok("D0001-01-01T00:00:00.123_456_789Z"),
+        ),
+        (
+            9999,
+            12,
+            31,
+            23,
+            59,
+            60,
+            999_999_999,
+            0,
+            0,
+            Ok("D9999-12-31T23:59:60.999_999_999Z"),
+        ),
+        (
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            -23,
+            59,
+            Ok("D0001-01-01T00:00:00-2359"),
+        ),
+        (1, 1, 1, 0, 0, 0, 0, 23, 59, Ok("D0001-01-01T00:00:00+2359")),
     ] {
         let mut encoder = Encoder::new();
         match expected {
             Ok(s) => {
-                encoder.append_year(year).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()));
-            }
-            Err(e) => {
-                assert_eq!(encoder.append_year(year).err(), Some(e));
-            }
-        }
-    }
-}
-
-#[test]
-fn year_week() {
-    for (week, expected) in [
-        (0, Err(EncodeError::InvalidWeek)),
-        (1, Ok("D2021-W01")),
-        (53, Ok("D2021-W53")),
-        (54, Err(EncodeError::InvalidWeek)),
-        (u8::MAX, Err(EncodeError::InvalidWeek)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_year(2021).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_week(week).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()));
-            }
-            Err(e) => {
-                assert_eq!(appender.append_week(week).err(), Some(e));
-            }
-        }
-    }
-}
-
-#[test]
-fn year_week_weekday() {
-    for (weekday, expected) in [
-        (0, Err(EncodeError::InvalidWeekday)),
-        (1, Ok("D2021-W02-1")),
-        (7, Ok("D2021-W02-7")),
-        (8, Err(EncodeError::InvalidWeekday)),
-        (u8::MAX, Err(EncodeError::InvalidWeekday)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_year(2021).unwrap().append_week(2).unwrap();
-        match expected {
-            Ok(s) => {
-                appender
-                    .append_weekday(weekday)
-                    .unwrap_or_else(|_| panic!("weekday={weekday}"));
-                assert_eq!(
-                    encoder.into_string(),
-                    Ok(s.to_string()),
-                    "weekday={weekday}"
-                );
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_weekday(weekday).err(),
-                    Some(e),
-                    "weekday={weekday}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn year_month() {
-    for (month, expected) in [
-        (0, Err(EncodeError::InvalidMonth)),
-        (1, Ok("D2024-01")),
-        (12, Ok("D2024-12")),
-        (13, Err(EncodeError::InvalidMonth)),
-        (u8::MAX, Err(EncodeError::InvalidMonth)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_year(2024).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_month(month).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()));
-            }
-            Err(e) => {
-                assert_eq!(appender.append_month(month).err(), Some(e));
-            }
-        }
-    }
-}
-
-#[test]
-fn year_month_day() {
-    for (month, day, expected) in [
-        (1, 0, Err(EncodeError::InvalidDay)),
-        (1, 1, Ok("D2024-01-01")),
-        (2, 30, Ok("D2024-02-30")),
-        (12, 31, Ok("D2024-12-31")),
-        (1, 32, Err(EncodeError::InvalidDay)),
-        (1, u8::MAX, Err(EncodeError::InvalidDay)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_year(2024).unwrap();
-        match expected {
-            Ok(s) => {
-                appender
-                    .append_month(month)
-                    .unwrap()
-                    .append_day(day)
-                    .unwrap();
+                encoder
+                    .append_date_time_offset(
+                        year,
+                        month,
+                        day,
+                        hour,
+                        minute,
+                        second,
+                        nanosecond,
+                        offset_hour,
+                        offset_minute,
+                    )
+                    .expect(s);
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {
                 assert_eq!(
-                    appender.append_month(month).unwrap().append_day(day).err(),
+                    encoder
+                        .append_date_time_offset(
+                            year,
+                            month,
+                            day,
+                            hour,
+                            minute,
+                            second,
+                            nanosecond,
+                            offset_hour,
+                            offset_minute,
+                        )
+                        .err(),
                     Some(e)
                 );
             }
         }
     }
-}
-
-#[test]
-fn year_month_day_hour() {
-    for (hour, expected) in [
-        (0, Ok("D2021-02-03T00")),
-        (1, Ok("D2021-02-03T01")),
-        (23, Ok("D2021-02-03T23")),
-        (24, Err(EncodeError::InvalidHour)),
-        (u8::MAX, Err(EncodeError::InvalidHour)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder
-            .append_year(2021)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_day(3)
-            .unwrap();
-        match expected {
-            Ok(s) => {
-                appender
-                    .append_hour(hour)
-                    .unwrap_or_else(|_| panic!("hour={hour}"));
-                assert_eq!(encoder.into_string(), Ok(s.to_string()), "hour={hour}");
-            }
-            Err(e) => {
-                assert_eq!(appender.append_hour(hour).err(), Some(e), "hour={hour}");
-            }
-        }
-    }
-}
-
-#[test]
-fn hour() {
-    for (hour, expected) in [
-        (0, Ok("T00")),
-        (1, Ok("T01")),
-        (23, Ok("T23")),
-        (24, Err(EncodeError::InvalidHour)),
-        (u8::MAX, Err(EncodeError::InvalidHour)),
-    ] {
-        let mut encoder = Encoder::new();
-        match expected {
-            Ok(s) => {
-                encoder.append_hour(hour).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()), "hour={hour}");
-            }
-            Err(e) => {
-                assert_eq!(encoder.append_hour(hour).err(), Some(e), "hour={hour}");
-            }
-        }
-    }
-}
-
-#[test]
-fn hour_minute() {
-    for (minute, expected) in [
-        (0, Ok("T01:00")),
-        (1, Ok("T01:01")),
-        (59, Ok("T01:59")),
-        (60, Err(EncodeError::InvalidMinute)),
-        (u8::MAX, Err(EncodeError::InvalidMinute)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_hour(1).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_minute(minute).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()), "minute={minute}");
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_minute(minute).err(),
-                    Some(e),
-                    "minute={minute}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn hour_minute_second() {
-    for (second, expected) in [
-        (0, Ok("T01:23:00")),
-        (1, Ok("T01:23:01")),
-        (59, Ok("T01:23:59")),
-        (60, Ok("T01:23:60")),
-        (61, Err(EncodeError::InvalidSecond)),
-        (u8::MAX, Err(EncodeError::InvalidSecond)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_hour(1).unwrap().append_minute(23).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_second(second).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()), "second={second}");
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_second(second).err(),
-                    Some(e),
-                    "second={second}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn hour_minute_millisecond() {
-    for (millisecond, expected) in [
-        (0, Ok("T01:23:00.000")),
-        (1, Ok("T01:23:00.001")),
-        (59_999, Ok("T01:23:59.999")),
-        (60_999, Ok("T01:23:60.999")),
-        (61_000, Err(EncodeError::InvalidMillisecond)),
-        (u32::MAX, Err(EncodeError::InvalidMillisecond)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_hour(1).unwrap().append_minute(23).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_millisecond(millisecond).unwrap();
-                assert_eq!(
-                    encoder.into_string(),
-                    Ok(s.to_string()),
-                    "millisecond={millisecond}"
-                );
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_millisecond(millisecond).err(),
-                    Some(e),
-                    "millisecond={millisecond}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn hour_minute_microsecond() {
-    for (microsecond, expected) in [
-        (0, Ok("T01:23:00.000_000")),
-        (1, Ok("T01:23:00.000_001")),
-        (59_999_999, Ok("T01:23:59.999_999")),
-        (60_999_999, Ok("T01:23:60.999_999")),
-        (61_000_000, Err(EncodeError::InvalidMicrosecond)),
-        (u32::MAX, Err(EncodeError::InvalidMicrosecond)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_hour(1).unwrap().append_minute(23).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_microsecond(microsecond).unwrap();
-                assert_eq!(
-                    encoder.into_string(),
-                    Ok(s.to_string()),
-                    "microsecond={microsecond}"
-                );
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_microsecond(microsecond).err(),
-                    Some(e),
-                    "microsecond={microsecond}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn hour_minute_nanosecond() {
-    for (nanosecond, expected) in [
-        (0, Ok("T01:23:00.000_000_000")),
-        (1, Ok("T01:23:00.000_000_001")),
-        (59_999_999_999, Ok("T01:23:59.999_999_999")),
-        (60_999_999_999, Ok("T01:23:60.999_999_999")),
-        (61_000_000_000, Err(EncodeError::InvalidNanosecond)),
-        (u64::MAX, Err(EncodeError::InvalidNanosecond)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_hour(1).unwrap().append_minute(23).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_nanosecond(nanosecond).unwrap();
-                assert_eq!(
-                    encoder.into_string(),
-                    Ok(s.to_string()),
-                    "nanosecond={nanosecond}"
-                );
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_nanosecond(nanosecond).err(),
-                    Some(e),
-                    "nanosecond={nanosecond}"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn date_tzoffset() {
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-02Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_day(3)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-02-03Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_week(2)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-W02Z"
-    );
-}
-#[test]
-fn datetime_tzoffset() {
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_day(3)
-            .unwrap()
-            .append_hour(4)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-02-03T04Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_day(3)
-            .unwrap()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-02-03T04:05Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_year(2001)
-            .unwrap()
-            .append_month(2)
-            .unwrap()
-            .append_day(3)
-            .unwrap()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_second(6)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "D2001-02-03T04:05:06Z"
-    );
-}
-#[test]
-fn time_tzoffset() {
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_second(6)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05:06Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_millisecond(6007)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05:06.007Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_microsecond(6_007_008)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05:06.007_008Z"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_nanosecond(6_007_008_009)
-            .unwrap()
-            .append_tzoffset(0, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05:06.007_008_009Z"
-    );
-}
-#[test]
-fn tzoffset() {
-    for (hour, minute, expected) in [
-        (-13, 0, Err(EncodeError::InvalidTimezoneOffset)),
-        (0, 60, Err(EncodeError::InvalidTimezoneOffset)),
-        (-12, 59, Ok("D2021-1259")),
-        (-12, 0, Ok("D2021-12")),
-        (-5, 30, Ok("D2021-0530")),
-        (-1, 0, Ok("D2021-01")),
-        (-1, 1, Ok("D2021-0101")),
-        // Cannot represent -00xx.
-        (0, 0, Ok("D2021Z")),
-        (0, 1, Ok("D2021+0001")),
-        (1, 0, Ok("D2021+01")),
-        (5, 30, Ok("D2021+0530")),
-        (12, 59, Ok("D2021+1259")),
-        (13, 0, Err(EncodeError::InvalidTimezoneOffset)),
-        (0, 60, Err(EncodeError::InvalidTimezoneOffset)),
-        (i8::MAX, 0, Err(EncodeError::InvalidTimezoneOffset)),
-        (0, u8::MAX, Err(EncodeError::InvalidTimezoneOffset)),
-    ] {
-        let mut encoder = Encoder::new();
-        let appender = encoder.append_year(2021).unwrap();
-        match expected {
-            Ok(s) => {
-                appender.append_tzoffset(hour, minute).unwrap();
-                assert_eq!(encoder.into_string(), Ok(s.to_string()), "minute={minute}");
-            }
-            Err(e) => {
-                assert_eq!(
-                    appender.append_tzoffset(hour, minute).err(),
-                    Some(e),
-                    "minute={minute}"
-                );
-            }
-        }
-    }
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_tzoffset(-8, 0)
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04-08"
-    );
-    assert_eq!(
-        Encoder::new()
-            .append_hour(4)
-            .unwrap()
-            .append_minute(5)
-            .unwrap()
-            .append_nanosecond(6_007_008_009)
-            .unwrap()
-            .append_tzoffset(5, 30) // India Standard Time
-            .unwrap()
-            .as_str()
-            .unwrap(),
-        "T04:05:06.007_008_009+0530"
-    );
 }

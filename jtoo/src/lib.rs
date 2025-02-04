@@ -48,11 +48,13 @@ mod date_time_offset;
 mod decode;
 mod decoder;
 mod encode;
+mod encoder;
 
 pub use date_time_offset::*;
 pub use decode::*;
 pub use decoder::*;
 pub use encode::*;
+pub use encoder::*;
 
 /// Converts a byte slice into a string using
 /// [`core::ascii::escape_default`](https://doc.rust-lang.org/core/ascii/fn.escape_default.html)
