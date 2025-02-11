@@ -3,6 +3,7 @@ use jtoo::{EncodeError, Encoder};
 #[test]
 fn empty() {
     let encoder = Encoder::new();
+    assert_eq!(encoder.as_str(), Ok(""));
     assert_eq!(encoder.into_string(), Ok(String::new()));
 }
 
@@ -20,6 +21,7 @@ fn bool_value() {
     encoder.append_bool(true).unwrap();
     encoder.append_bool(false).unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[T,F]"));
     assert_eq!(encoder.into_string(), Ok("[T,F]".to_string()));
 }
 
@@ -49,6 +51,7 @@ fn byte_string_value() {
         ])
         .unwrap();
     encoder.close_byte_string().unwrap();
+    assert_eq!(encoder.as_str(), Ok("B0f1e2d3c4b5a69788796a5b4c3d2e1f0"));
     assert_eq!(
         encoder.into_string(),
         Ok("B0f1e2d3c4b5a69788796a5b4c3d2e1f0".to_string())
@@ -63,6 +66,7 @@ fn byte_string_closed() {
     encoder.close_byte_string().unwrap();
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[B,T]"));
     assert_eq!(encoder.into_string(), Ok("[B,T]".to_string()));
 }
 
@@ -187,6 +191,7 @@ fn decimal() {
     ] {
         let mut encoder = Encoder::new();
         encoder.append_decimal(value, exp).unwrap();
+        assert_eq!(encoder.as_str(), Ok(expected), "value={value} exp={exp}");
         assert_eq!(
             encoder.into_string(),
             Ok(expected.to_string()),
@@ -224,6 +229,7 @@ fn integer() {
     ] {
         let mut encoder = Encoder::new();
         encoder.append_integer(value).unwrap();
+        assert_eq!(encoder.as_str(), Ok(expected.to_string().as_str()));
         assert_eq!(encoder.into_string(), Ok(expected.to_string()));
     }
 }
@@ -240,6 +246,7 @@ fn list_empty() {
     let mut encoder = Encoder::new();
     encoder.open_list().unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[]"));
     assert_eq!(encoder.into_string(), Ok("[]".to_string()));
 }
 
@@ -250,6 +257,7 @@ fn list_nested() {
     encoder.open_list().unwrap();
     encoder.close_list().unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[[]]"));
     assert_eq!(encoder.into_string(), Ok("[[]]".to_string()));
 }
 
@@ -268,6 +276,7 @@ fn list_items() {
     encoder.append_string("string1").unwrap();
     encoder.close_string().unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[T,Ba1,[F],\"string1\"]"));
     assert_eq!(
         encoder.into_string(),
         Ok("[T,Ba1,[F],\"string1\"]".to_string())
@@ -282,6 +291,7 @@ fn list_closed() {
     encoder.close_list().unwrap();
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[[],T]"));
     assert_eq!(encoder.into_string(), Ok("[[],T]".to_string()));
 }
 
@@ -320,6 +330,7 @@ fn string_empty() {
     let mut encoder = Encoder::new();
     encoder.open_string().unwrap();
     encoder.close_string().unwrap();
+    assert_eq!(encoder.as_str(), Ok("\"\""));
     assert_eq!(encoder.into_string(), Ok("\"\"".to_string()));
 }
 
@@ -329,6 +340,7 @@ fn string_ok() {
     encoder.open_string().unwrap();
     encoder.append_string("string1").unwrap();
     encoder.close_string().unwrap();
+    assert_eq!(encoder.as_str(), Ok("\"string1\""));
     assert_eq!(encoder.into_string(), Ok("\"string1\"".to_string()));
 }
 
@@ -339,6 +351,7 @@ fn string_ok2() {
     encoder.append_string("a").unwrap();
     encoder.append_string("b").unwrap();
     encoder.close_string().unwrap();
+    assert_eq!(encoder.as_str(), Ok("\"ab\""));
     assert_eq!(encoder.into_string(), Ok("\"ab\"".to_string()));
 }
 
@@ -348,6 +361,12 @@ fn string_escaped() {
     encoder.open_string().unwrap();
     encoder.append_string("\x00 \x01 \x02 \x03 \x04 \x05 \x06 \x07 \x08 \x09 \x0a \x0b \x0c \x0d \x0e \x0f \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17 \x18 \x19 \x1a \x1b \x1c \x1d \x1e \x1f \" \\ \x7f").unwrap();
     encoder.close_string().unwrap();
+    assert_eq!(
+        encoder.as_str(),
+        Ok(
+            r#""\00 \01 \02 \03 \04 \05 \06 \07 \08 \09 \0a \0b \0c \0d \0e \0f \10 \11 \12 \13 \14 \15 \16 \17 \18 \19 \1a \1b \1c \1d \1e \1f \22 \5c \7f""#
+        )
+    );
     assert_eq!(encoder.into_string(), Ok(r#""\00 \01 \02 \03 \04 \05 \06 \07 \08 \09 \0a \0b \0c \0d \0e \0f \10 \11 \12 \13 \14 \15 \16 \17 \18 \19 \1a \1b \1c \1d \1e \1f \22 \5c \7f""#.to_string()));
 }
 
@@ -359,6 +378,7 @@ fn string_closed() {
     encoder.close_string().unwrap();
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[\"\",T]"));
     assert_eq!(encoder.into_string(), Ok("[\"\",T]".to_string()));
 }
 
@@ -405,6 +425,7 @@ fn timestamp_seconds() {
         match expected {
             Ok(s) => {
                 encoder.append_timestamp_seconds(value).unwrap();
+                assert_eq!(encoder.as_str(), Ok(s));
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {
@@ -434,6 +455,7 @@ fn timestamp_milliseconds() {
         match expected {
             Ok(s) => {
                 encoder.append_timestamp_milliseconds(value).unwrap();
+                assert_eq!(encoder.as_str(), Ok(s));
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {
@@ -463,6 +485,7 @@ fn timestamp_microseconds() {
         match expected {
             Ok(s) => {
                 encoder.append_timestamp_microseconds(value).unwrap();
+                assert_eq!(encoder.as_str(), Ok(s));
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {
@@ -492,6 +515,7 @@ fn timestamp_nanoseconds() {
         match expected {
             Ok(s) => {
                 encoder.append_timestamp_nanosecond(value).unwrap();
+                assert_eq!(encoder.as_str(), Ok(s));
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {
@@ -618,6 +642,7 @@ fn append_date_time_offset() {
                         offset_minute,
                     )
                     .expect(s);
+                assert_eq!(encoder.as_str(), Ok(s));
                 assert_eq!(encoder.into_string(), Ok(s.to_string()));
             }
             Err(e) => {

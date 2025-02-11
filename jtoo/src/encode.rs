@@ -82,17 +82,23 @@ impl Encode for u64 {
 }
 impl Encode for &str {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_string(self)
+        encoder.open_string()?;
+        encoder.append_string(self)?;
+        encoder.close_string()
     }
 }
 impl Encode for Box<str> {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_string(self)
+        encoder.open_string()?;
+        encoder.append_string(self)?;
+        encoder.close_string()
     }
 }
 impl Encode for String {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_string(&self)
+        encoder.open_string()?;
+        encoder.append_string(&self)?;
+        encoder.close_string()
     }
 }
 impl<T: Encode> Encode for Option<T> {

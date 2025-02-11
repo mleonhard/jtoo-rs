@@ -271,6 +271,10 @@ fn consume_date_time_offset() {
             Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
         ),
         (
+            b"D1970-01-01T00:00:00-0100",
+            Err(ErrorReason::ZeroTimeZoneMinutesShouldBeOmitted),
+        ),
+        (
             b"D1970-01-01T00:00:00+000",
             Err(ErrorReason::MalformedOffset),
         ),
@@ -305,6 +309,43 @@ fn consume_date_time_offset() {
             b"D9999-12-31T23:59:60.999_999_999+2359",
             Ok(DateTimeOffset::MAX),
         ),
+        (b"D0000-01-01T00:00:00Z", Err(ErrorReason::YearOutOfRange)),
+        (b"D10000-01-01T00:00:00Z", Err(ErrorReason::MalformedDate)),
+        (b"D0001-00-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-13-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-001-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-01-00T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-32T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-001T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-01T60:00:00Z", Err(ErrorReason::HourOutOfRange)),
+        (b"D0001-01-01T001:00:00Z", Err(ErrorReason::MalformedTime)),
+        (b"D0001-01-01T00:60:00Z", Err(ErrorReason::MinuteOutOfRange)),
+        (b"D0001-01-01T00:001:00Z", Err(ErrorReason::MalformedTime)),
+        (b"D0001-01-01T00:00:61Z", Err(ErrorReason::SecondOutOfRange)),
+        (
+            b"D0001-01-01T00:00:001Z",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00.000_000_000_001Z",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00+25",
+            Err(ErrorReason::TimezoneOffsetHourOutOfRange),
+        ),
+        (
+            b"D0001-01-01T00:00:00+0060",
+            Err(ErrorReason::TimezoneOffsetMinuteOutOfRange),
+        ),
+        (
+            b"D0001-01-01T00:00:01010",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00+01Z",
+            Err(ErrorReason::DataNotConsumed),
+        ),
     ] {
         let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
         let mut decoder = Decoder::new(bytes);
@@ -315,7 +356,10 @@ fn consume_date_time_offset() {
                 decoder.close().expect(&msg);
             }
             Err(expected_reason) => {
-                let e = result.expect_err(&msg);
+                let e = match result {
+                    Ok(_) => decoder.close().expect_err(&msg),
+                    Err(e) => e,
+                };
                 assert_eq!(e.reason, expected_reason, "{msg}");
             }
         }
