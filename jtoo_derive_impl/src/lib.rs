@@ -1,7 +1,7 @@
 //! This crate implements the derive macros for the [`jtoo`](https://crates.io/crates/jtoo)
 //! `Encode` and `Decode` traits.
 #![forbid(unsafe_code)]
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{parse_quote, Data, DeriveInput, Fields, GenericParam};
@@ -52,7 +52,7 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
                     encoder.append_string(#field_name_string)?;
                     encoder.close_string()?;
                     jtoo::Encode::encode_using(&self.#field_name, encoder)?;
-                    encoder.close_list()
+                    encoder.close_list()?;
                 }
             });
             quote! {
@@ -63,8 +63,9 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
         }
         Fields::Unnamed(ref fields) => {
             let per_field_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
+                let index = Literal::usize_unsuffixed(n);
                 quote_spanned! {field.span()=>
-                    jtoo::Encode::encode_using(&self.#n, encoder)?;
+                    jtoo::Encode::encode_using(&self . #index, encoder)?;
                 }
             });
             quote! {
