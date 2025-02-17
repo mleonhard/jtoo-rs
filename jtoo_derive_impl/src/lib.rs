@@ -4,7 +4,7 @@
 use proc_macro2::{Literal, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
-use syn::{parse_quote, Data, DeriveInput, Fields, GenericParam};
+use syn::{parse_quote, Data, DataStruct, DeriveInput, Fields, GenericParam};
 
 #[macro_export]
 macro_rules! dprintln {
@@ -24,24 +24,8 @@ pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
     result
 }
 
-/// # Errors
-/// Returns `Err(String)` with a human-readable description of the problem.
-pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
-    let input: DeriveInput = syn::parse2(stream)?;
-
-    // Add a bound `T: Encode` to every type parameter T.
-    let mut generics = input.generics;
-    for param in &mut generics.params {
-        if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(jtoo::Encode));
-        }
-    }
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let Data::Struct(ref data) = &input.data else {
-        unimplemented!()
-    };
-
-    let encoder_calls = match data.fields {
+fn struct_encoder_calls(data: &DataStruct) -> TokenStream {
+    match data.fields {
         Fields::Named(ref fields) => {
             let per_field_calls = fields.named.iter().map(|field| {
                 let field_name = field.ident.as_ref().unwrap();
@@ -80,6 +64,26 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
                 encoder.close_list()
             }
         }
+    }
+}
+
+/// # Errors
+/// Returns `Err(String)` with a human-readable description of the problem.
+pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
+    let input: DeriveInput = syn::parse2(stream)?;
+
+    // Add a bound `T: Encode` to every type parameter T.
+    let mut generics = input.generics;
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(jtoo::Encode));
+        }
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let encoder_calls = match &input.data {
+        Data::Struct(data) => struct_encoder_calls(data),
+        Data::Enum(_) => unimplemented!(),
+        Data::Union(_) => unimplemented!(),
     };
     let struct_name = input.ident;
     Ok(quote! {

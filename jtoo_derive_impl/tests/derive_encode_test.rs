@@ -4,7 +4,7 @@ use quote::quote;
 #[test]
 fn empty() {
     let actual = derive_encode(quote! {
-        pub struct Struct0 {}
+        struct Struct0 {}
     })
     .unwrap();
     let expected = quote! {
@@ -21,7 +21,7 @@ fn empty() {
 #[test]
 fn named_field() {
     let actual = derive_encode(quote! {
-        pub struct Struct0 {
+        struct Struct0 {
             pub field0: bool,
         }
     })
@@ -46,7 +46,7 @@ fn named_field() {
 #[test]
 fn all_field_types() {
     let actual = derive_encode(quote! {
-        pub struct Struct0 {
+        struct Struct0 {
             pub field0: bool,
             pub field1: i8,
             pub field2: u8,
@@ -211,7 +211,7 @@ fn all_field_types() {
 #[test]
 fn unnamed_fields() {
     let actual = derive_encode(quote! {
-        pub struct Struct0(bool, String);
+        struct Struct0(bool, String);
     })
     .unwrap();
     let expected = quote! {
@@ -230,13 +230,68 @@ fn unnamed_fields() {
 #[test]
 fn unit() {
     let actual = derive_encode(quote! {
-        pub struct Struct0;
+        struct Struct0;
     })
     .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
             fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
                 encoder.open_list()?;
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn parameter() {
+    let actual = derive_encode(quote! {
+        struct Struct0<T0>(T0);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: jtoo::Encode> jtoo::Encode for Struct0<T0> {
+            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+                encoder.open_list()?;
+                jtoo::Encode::encode_using(&self.0, encoder)?;
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn constrained_parameter() {
+    let actual = derive_encode(quote! {
+        struct Struct0<T0: Clone>(T0);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Clone + jtoo::Encode> jtoo::Encode for Struct0<T0> {
+            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+                encoder.open_list()?;
+                jtoo::Encode::encode_using(&self.0, encoder)?;
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn two_parameters() {
+    let actual = derive_encode(quote! {
+        struct Struct0<T0: Sized + Clone + Send, T1>(T0, T1);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Encode, T1: jtoo::Encode> jtoo::Encode for Struct0<T0, T1> {
+            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+                encoder.open_list()?;
+                jtoo::Encode::encode_using(&self.0, encoder)?;
+                jtoo::Encode::encode_using(&self.1, encoder)?;
                 encoder.close_list()
             }
         }

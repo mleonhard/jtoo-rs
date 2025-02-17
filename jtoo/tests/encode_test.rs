@@ -103,6 +103,14 @@ fn nested_struct() {
 }
 
 #[test]
+fn parameterized_struct() {
+    #[derive(Encode)]
+    struct Struct0<T: Sized + Clone + Send>(T);
+    let value = Struct0(true);
+    assert_eq!(value.encode(), Ok(r#"[T]"#.to_string()));
+}
+
+#[test]
 fn encode_impl() {
     let mut encoder = Encoder::new();
     true.encode_using(&mut encoder).unwrap();
