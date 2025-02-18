@@ -147,3 +147,14 @@ impl Encode for SystemTime {
         encoder.append_timestamp_seconds(seconds)
     }
 }
+#[cfg(feature = "rust_decimal")]
+impl Encode for rust_decimal::Decimal {
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        use rust_decimal::prelude::ToPrimitive;
+        let value = self.normalize();
+        let mantissa = value.mantissa().to_i64().ok_or(EncodeError::OutOfRange)?;
+        let exp =
+            i8::try_from(-i64::from(value.fract().scale())).map_err(|_| EncodeError::OutOfRange)?;
+        encoder.append_decimal(mantissa, exp)
+    }
+}

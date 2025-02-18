@@ -1,12 +1,42 @@
-use jtoo::{EncodeError, Encoder};
+use jtoo::{Encode, EncodeError, Encoder};
+use rust_decimal_macros::dec;
 
-// TODO: Test encode.
-// #[test]
-// fn encode() {
-//     let mut encoder = Encoder::new();
-//     (0f32).encode_using(&mut encoder).unwrap();
-//     assert_eq!(encoder.as_str(), Ok("-42"));
-// }
+#[test]
+fn encode() {
+    assert_eq!(
+        dec!(-9_223_372_036_854_775_809).encode(),
+        Err(EncodeError::OutOfRange)
+    );
+    assert_eq!(
+        dec!(-9_223_372_036_854_775_808).encode().unwrap().as_str(),
+        "-9_223_372_036_854_775_808.0"
+    );
+    assert_eq!(dec!(-1).encode().unwrap().as_str(), "-1.0");
+    assert_eq!(
+        dec!(-0.000_000_000_000_000_000_000_000_000_1)
+            .encode()
+            .unwrap()
+            .as_str(),
+        "-0.000_000_000_000_000_000_000_000_000_1"
+    );
+    assert_eq!(dec!(0).encode().unwrap().as_str(), "0.0");
+    assert_eq!(
+        dec!(0.000_000_000_000_000_000_000_000_000_1)
+            .encode()
+            .unwrap()
+            .as_str(),
+        "0.000_000_000_000_000_000_000_000_000_1"
+    );
+    assert_eq!(dec!(1).encode().unwrap().as_str(), "1.0");
+    assert_eq!(
+        dec!(9_223_372_036_854_775_807).encode().unwrap().as_str(),
+        "9_223_372_036_854_775_807.0"
+    );
+    assert_eq!(
+        dec!(9_223_372_036_854_775_808).encode(),
+        Err(EncodeError::OutOfRange)
+    );
+}
 
 #[test]
 fn append() {
