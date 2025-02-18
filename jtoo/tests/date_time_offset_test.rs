@@ -1,4 +1,4 @@
-use jtoo::{DateTimeOffset, EncodeError, Encoder};
+use jtoo::{DateTimeOffset, Encode, EncodeError, Encoder};
 
 #[test]
 fn millisecond() {
@@ -10,7 +10,82 @@ fn microsecond() {
     assert_eq!(999_999, DateTimeOffset::MAX.microsecond());
 }
 
-// TODO: Test `encode`.
+#[test]
+fn encode() {
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(1, time::Month::January, 1).unwrap(),
+            time::Time::from_hms(0, 0, 0).unwrap(),
+            time::UtcOffset::from_hms(-24, 59, 0).unwrap()
+        )
+        .encode(),
+        Err(EncodeError::InvalidOffset)
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(0, time::Month::January, 1).unwrap(),
+            time::Time::from_hms(0, 0, 0).unwrap(),
+            time::UtcOffset::from_hms(-23, 59, 0).unwrap()
+        )
+        .encode(),
+        Err(EncodeError::InvalidYear)
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(1, time::Month::January, 1).unwrap(),
+            time::Time::from_hms(0, 0, 0).unwrap(),
+            time::UtcOffset::from_hms(-23, 59, 0).unwrap()
+        )
+        .encode()
+        .unwrap()
+        .as_str(),
+        "D0001-01-01T00:00:00-2359"
+    );
+    assert_eq!(
+        time::OffsetDateTime::UNIX_EPOCH.encode().unwrap().as_str(),
+        "D1970-01-01T00:00:00Z"
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(2025, time::Month::February, 17).unwrap(),
+            time::Time::from_hms(2, 3, 4).unwrap(),
+            time::UtcOffset::from_hms(5, 6, 0).unwrap()
+        )
+        .encode()
+        .unwrap()
+        .as_str(),
+        "D2025-02-17T02:03:04+0506"
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(9999, time::Month::December, 31).unwrap(),
+            time::Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
+            time::UtcOffset::from_hms(23, 59, 0).unwrap()
+        )
+        .encode()
+        .unwrap()
+        .as_str(),
+        "D9999-12-31T23:59:59.999_999_999+2359"
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(9999, time::Month::December, 31).unwrap(),
+            time::Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
+            time::UtcOffset::from_hms(24, 59, 0).unwrap()
+        )
+        .encode(),
+        Err(EncodeError::InvalidOffset)
+    );
+    assert_eq!(
+        time::OffsetDateTime::new_in_offset(
+            time::Date::from_calendar_date(9999, time::Month::December, 31).unwrap(),
+            time::Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
+            time::UtcOffset::from_hms(23, 59, 1).unwrap()
+        )
+        .encode(),
+        Err(EncodeError::InvalidOffset)
+    );
+}
 
 #[test]
 fn append() {

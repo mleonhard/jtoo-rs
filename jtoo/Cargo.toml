@@ -11,9 +11,11 @@ version = "0.1.0"
 
 [dependencies]
 # TODO: Remove transitive dependency on unsafe `arrayvec` crate.
-rust_decimal = { version = "1", default-features = false, optional = true }
 jtoo_derive = { version = "0.1", path = "../jtoo_derive" }
+rust_decimal = { version = "1", default-features = false, optional = true }
+time = { version = "0.3", default-features = false, optional = true }
 
 [dev-dependencies]
 rust_decimal = { version = "1", default-features = false }
 rust_decimal_macros = { version = "1", default-features = false }
+time = { version = "0.3", default-features = false }

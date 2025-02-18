@@ -158,3 +158,26 @@ impl Encode for rust_decimal::Decimal {
         encoder.append_decimal(mantissa, exp)
     }
 }
+#[cfg(feature = "time")]
+impl Encode for time::OffsetDateTime {
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        let year = u16::try_from(self.year()).map_err(|_| EncodeError::OutOfRange)?;
+        let month = u8::from(self.month());
+        let offset = self.offset();
+        let offset_minutes = offset.minutes_past_hour().abs() as u8;
+        if offset.seconds_past_minute() != 0 {
+            return Err(EncodeError::InvalidOffset);
+        }
+        encoder.append_date_time_offset(
+            year,
+            month,
+            self.day(),
+            self.hour(),
+            self.minute(),
+            self.second(),
+            self.nanosecond() as u64,
+            offset.whole_hours(),
+            offset_minutes,
+        )
+    }
+}
