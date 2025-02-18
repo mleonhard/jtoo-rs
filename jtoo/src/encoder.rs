@@ -425,6 +425,7 @@ impl Encoder {
             Some(Elem::String) => Err(EncodeError::UnclosedString),
             Some(Elem::ByteString) => Err(EncodeError::UnclosedByteString),
             Some(Elem::EmptyList | Elem::List) => Err(EncodeError::UnclosedList),
+            None if self.string.is_empty() => Err(EncodeError::Empty),
             None => Ok(self.string),
         }
     }
