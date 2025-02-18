@@ -82,34 +82,3 @@ pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
     }
     result
 }
-
-pub struct ByteStringVec(pub Vec<u8>);
-impl Encode for ByteStringVec {
-    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_byte_string(self.0.as_slice())
-    }
-}
-impl Decode for ByteStringVec {
-    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
-        Ok(Self(decoder.consume_byte_string()?))
-    }
-}
-
-pub struct ByteStringSlice<'x>(pub &'x [u8]);
-impl<'x> Encode for ByteStringSlice<'x> {
-    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_byte_string(self.0)
-    }
-}
-
-pub struct ByteStringBox(pub Box<[u8]>);
-impl Encode for ByteStringBox {
-    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.append_byte_string(self.0.as_ref())
-    }
-}
-impl Decode for ByteStringBox {
-    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
-        Ok(Self(decoder.consume_byte_string()?.into_boxed_slice()))
-    }
-}

@@ -1,4 +1,5 @@
 use crate::encoder::Encoder;
+use std::time::SystemTime;
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Eq, PartialEq)]
@@ -122,5 +123,27 @@ impl<T: Encode> Encode for Box<[T]> {
 impl<T: Encode> Encode for Vec<T> {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
         self.as_slice().encode_using(encoder)
+    }
+}
+impl Encode for SystemTime {
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        // A u64 can hold a nanoseconds timestamp up to the year 2554.
+        let duration = self
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_err(|_| EncodeError::OutOfRange)?;
+        let nanoseconds = u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX);
+        if nanoseconds % 1000 != 0 {
+            return encoder.append_timestamp_nanosecond(nanoseconds);
+        }
+        let microseconds = nanoseconds / 1000;
+        if microseconds % 1000 != 0 {
+            return encoder.append_timestamp_microseconds(microseconds);
+        }
+        let milliseconds = microseconds / 1000;
+        if milliseconds % 1000 != 0 {
+            return encoder.append_timestamp_milliseconds(milliseconds);
+        }
+        let seconds = milliseconds / 1000;
+        encoder.append_timestamp_seconds(seconds)
     }
 }

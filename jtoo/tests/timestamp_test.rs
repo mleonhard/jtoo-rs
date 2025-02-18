@@ -1,10 +1,44 @@
-use jtoo::{EncodeError, Encoder};
+use jtoo::{Encode, EncodeError, Encoder};
+use std::time::{Duration, SystemTime};
 
-// TODO: Test encode.
-// #[test]
-// fn encode() {
-//     assert_eq!(SystemTime::UNIX_EPOCH.encode().unwrap().as_str(), r#"S0"#);
-// }
+#[test]
+fn encode() {
+    for (duration, expected) in [
+        (Duration::ZERO, "S0"),
+        (Duration::from_secs(987_654_321), "S987_654_321"),
+        (Duration::from_millis(987_654_321_100), "S987_654_321.100"),
+        (Duration::from_millis(987_654_321_120), "S987_654_321.120"),
+        (Duration::from_millis(987_654_321_123), "S987_654_321.123"),
+        (
+            Duration::from_micros(987_654_321_123_400),
+            "S987_654_321.123_400",
+        ),
+        (
+            Duration::from_micros(987_654_321_123_450),
+            "S987_654_321.123_450",
+        ),
+        (
+            Duration::from_micros(987_654_321_123_456),
+            "S987_654_321.123_456",
+        ),
+        (
+            Duration::from_nanos(987_654_321_123_456_700),
+            "S987_654_321.123_456_700",
+        ),
+        (
+            Duration::from_nanos(987_654_321_123_456_780),
+            "S987_654_321.123_456_780",
+        ),
+        (
+            Duration::from_nanos(987_654_321_123_456_789),
+            "S987_654_321.123_456_789",
+        ),
+    ] {
+        let msg = format!("{duration:?}");
+        let timestamp = SystemTime::UNIX_EPOCH.checked_add(duration).expect(&msg);
+        assert_eq!(timestamp.encode().expect(&msg).as_str(), expected);
+    }
+}
 
 #[test]
 fn seconds() {
