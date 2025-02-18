@@ -372,3 +372,22 @@ fn enum_two_parameters() {
     };
     assert_eq!(actual.to_string(), expected.to_string());
 }
+
+#[test]
+fn unions() {
+    let actual = derive_encode(quote! {
+        #[repr(C)]
+        union Union0 {
+            field0: u8,
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Encode for Union0 {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
+                compile_error!("This macro does not support union types.");
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}

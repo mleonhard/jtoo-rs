@@ -148,7 +148,7 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     let encoder_calls = match &input.data {
         Data::Struct(data) => fields_encoder_calls(data),
         Data::Enum(data) => enum_encoder_calls(&input.ident, data),
-        Data::Union(_) => unimplemented!(),
+        Data::Union(_) => quote! { compile_error!("This macro does not support union types."); },
     };
     let struct_name = input.ident;
     Ok(quote! {
