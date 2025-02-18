@@ -3,6 +3,7 @@ use crate::encoder::Encoder;
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Eq, PartialEq)]
 pub enum EncodeError {
+    Empty,
     InvalidDay,
     InvalidHour,
     InvalidMicrosecond,
@@ -82,23 +83,17 @@ impl Encode for u64 {
 }
 impl Encode for &str {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.open_string()?;
-        encoder.append_string(self)?;
-        encoder.close_string()
+        encoder.append_string(self)
     }
 }
 impl Encode for Box<str> {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.open_string()?;
-        encoder.append_string(self)?;
-        encoder.close_string()
+        encoder.append_string(self)
     }
 }
 impl Encode for String {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-        encoder.open_string()?;
-        encoder.append_string(&self)?;
-        encoder.close_string()
+        encoder.append_string(self)
     }
 }
 impl<T: Encode> Encode for Option<T> {

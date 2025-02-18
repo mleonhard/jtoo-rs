@@ -202,10 +202,7 @@ impl Encoder {
         Ok(())
     }
 
-    /// `1.0`, `1_234.567_8`, `0.01`
-    #[allow(clippy::missing_errors_doc)]
-    pub fn append_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
-        self.prepare_for_new_value()?;
+    fn push_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
         if value == 0 {
             if -1 < base10_exponent {
                 self.string.push_str("0.0");
@@ -265,10 +262,14 @@ impl Encoder {
         Ok(())
     }
 
-    /// `1_234`
+    /// `1.0`, `1_234.567_8`, `0.01`
     #[allow(clippy::missing_errors_doc)]
-    pub fn append_integer(&mut self, value: i64) -> Result<(), EncodeError> {
+    pub fn append_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
         self.prepare_for_new_value()?;
+        self.push_decimal(value, base10_exponent)
+    }
+
+    fn push_integer(&mut self, value: i64) -> Result<(), EncodeError> {
         let digits = value.unsigned_abs().to_string();
         if value.is_negative() {
             self.string.push('-');
@@ -283,6 +284,13 @@ impl Encoder {
             has_prev = true;
         }
         Ok(())
+    }
+
+    /// `1_234`
+    #[allow(clippy::missing_errors_doc)]
+    pub fn append_integer(&mut self, value: i64) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.push_integer(value)
     }
 
     #[allow(clippy::missing_errors_doc)]
@@ -305,6 +313,31 @@ impl Encoder {
         }
     }
 
+    /// `"$s"`
+    #[allow(clippy::missing_errors_doc)]
+    #[allow(clippy::missing_panics_doc)]
+    pub fn append_string(&mut self, s: &str) -> Result<(), EncodeError> {
+        self.prepare_for_new_value()?;
+        self.string.push('"');
+        for c in s.chars() {
+            let codepoint = c as u32;
+            match codepoint {
+                0x00..=0x1f | 0x22 | 0x5c | 0x7f => {
+                    let d1 = codepoint >> 4;
+                    let d2 = codepoint & 0x0F;
+                    let c1 = char::from_digit(d1, 16).unwrap();
+                    let c2 = char::from_digit(d2, 16).unwrap();
+                    self.string.push('\\');
+                    self.string.push(c1);
+                    self.string.push(c2);
+                }
+                _ => self.string.push(c),
+            }
+        }
+        self.string.push('"');
+        Ok(())
+    }
+
     /// `"`
     #[allow(clippy::missing_errors_doc)]
     pub fn open_string(&mut self) -> Result<(), EncodeError> {
@@ -316,7 +349,7 @@ impl Encoder {
 
     #[allow(clippy::missing_errors_doc)]
     #[allow(clippy::missing_panics_doc)]
-    pub fn append_string(&mut self, s: &str) -> Result<(), EncodeError> {
+    pub fn append_open_string(&mut self, s: &str) -> Result<(), EncodeError> {
         if self.stack.last() != Some(&Elem::String) {
             return Err(EncodeError::NotInString);
         }
@@ -356,7 +389,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(s).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.append_integer(value)
+        self.push_integer(value)
     }
 
     /// `S1_234.500`
@@ -365,7 +398,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(ms).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.append_decimal(value, -3)
+        self.push_decimal(value, -3)
     }
 
     /// `S1_234.567_800`
@@ -374,7 +407,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(us).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.append_decimal(value, -6)
+        self.push_decimal(value, -6)
     }
 
     /// `S1_234.567_890_100`
@@ -383,7 +416,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(ns).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.append_decimal(value, -9)
+        self.push_decimal(value, -9)
     }
 
     #[allow(clippy::missing_errors_doc)]
@@ -402,6 +435,7 @@ impl Encoder {
             Some(Elem::String) => Err(EncodeError::UnclosedString),
             Some(Elem::ByteString) => Err(EncodeError::UnclosedByteString),
             Some(Elem::EmptyList | Elem::List) => Err(EncodeError::UnclosedList),
+            None if self.string.is_empty() => Err(EncodeError::Empty),
             None => Ok(self.string.as_str()),
         }
     }

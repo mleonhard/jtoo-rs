@@ -2,14 +2,14 @@ use jtoo_derive_impl::derive_encode;
 use quote::quote;
 
 #[test]
-fn empty() {
+fn struct_unit() {
     let actual = derive_encode(quote! {
-        struct Struct0 {}
+        struct Struct0;
     })
     .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 encoder.close_list()
             }
@@ -19,7 +19,7 @@ fn empty() {
 }
 
 #[test]
-fn named_field() {
+fn struct_named_field() {
     let actual = derive_encode(quote! {
         struct Struct0 {
             pub field0: bool,
@@ -28,12 +28,10 @@ fn named_field() {
     .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field0")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field0, encoder)?;
                 encoder.close_list()?;
                 encoder.close_list()
@@ -44,7 +42,7 @@ fn named_field() {
 }
 
 #[test]
-fn all_field_types() {
+fn struct_all_field_types() {
     let actual = derive_encode(quote! {
         struct Struct0 {
             pub field0: bool,
@@ -73,132 +71,90 @@ fn all_field_types() {
     .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field0")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field0, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field1")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field1, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field2")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field2, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field3")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field3, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field4")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field4, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field5")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field5, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field6")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field6, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field7")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field7, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field8")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field8, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field9")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field9, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field10")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field10, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field11")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field11, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field12")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field12, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field13")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field13, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field14")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field14, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field15")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field15, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field16")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field16, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field17")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field17, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field18")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field18, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field19")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field19, encoder)?;
                 encoder.close_list()?;
                 encoder.open_list()?;
-                encoder.open_string()?;
                 encoder.append_string("field20")?;
-                encoder.close_string()?;
                 jtoo::Encode::encode_using(&self.field20, encoder)?;
                 encoder.close_list()?;
                 encoder.close_list()
@@ -209,14 +165,14 @@ fn all_field_types() {
 }
 
 #[test]
-fn unnamed_fields() {
+fn struct_tuple() {
     let actual = derive_encode(quote! {
         struct Struct0(bool, String);
     })
     .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 jtoo::Encode::encode_using(&self.0, encoder)?;
                 jtoo::Encode::encode_using(&self.1, encoder)?;
@@ -228,31 +184,14 @@ fn unnamed_fields() {
 }
 
 #[test]
-fn unit() {
-    let actual = derive_encode(quote! {
-        struct Struct0;
-    })
-    .unwrap();
-    let expected = quote! {
-        impl jtoo::Encode for Struct0 {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
-                encoder.open_list()?;
-                encoder.close_list()
-            }
-        }
-    };
-    assert_eq!(expected.to_string(), actual.to_string());
-}
-
-#[test]
-fn parameter() {
+fn struct_parameter() {
     let actual = derive_encode(quote! {
         struct Struct0<T0>(T0);
     })
     .unwrap();
     let expected = quote! {
         impl <T0: jtoo::Encode> jtoo::Encode for Struct0<T0> {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 jtoo::Encode::encode_using(&self.0, encoder)?;
                 encoder.close_list()
@@ -263,14 +202,14 @@ fn parameter() {
 }
 
 #[test]
-fn constrained_parameter() {
+fn struct_constrained_parameter() {
     let actual = derive_encode(quote! {
         struct Struct0<T0: Clone>(T0);
     })
     .unwrap();
     let expected = quote! {
         impl <T0: Clone + jtoo::Encode> jtoo::Encode for Struct0<T0> {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 jtoo::Encode::encode_using(&self.0, encoder)?;
                 encoder.close_list()
@@ -281,14 +220,14 @@ fn constrained_parameter() {
 }
 
 #[test]
-fn two_parameters() {
+fn struct_two_parameters() {
     let actual = derive_encode(quote! {
         struct Struct0<T0: Sized + Clone + Send, T1>(T0, T1);
     })
     .unwrap();
     let expected = quote! {
         impl <T0: Sized + Clone + Send + jtoo::Encode, T1: jtoo::Encode> jtoo::Encode for Struct0<T0, T1> {
-            fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
                 encoder.open_list()?;
                 jtoo::Encode::encode_using(&self.0, encoder)?;
                 jtoo::Encode::encode_using(&self.1, encoder)?;
@@ -297,4 +236,139 @@ fn two_parameters() {
         }
     };
     assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn enums() {
+    let actual = derive_encode(quote! {
+        enum Enum0 {
+            Unit0,
+            Tuple0(bool),
+            Tuple1(bool, u8),
+            Named0 { named_field0: bool },
+            Named1 { named_field0: bool, named_field1: u8 },
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Encode for Enum0 {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
+                encoder.open_list()?;
+                match self {
+                    Enum0::Unit0 => {
+                        encoder.append_string("Unit0")?;
+                    }
+                    Enum0::Tuple0(field0) => {
+                        encoder.append_string("Tuple0")?;
+                        jtoo::Encode::encode_using(field0, encoder)?;
+                    }
+                    Enum0::Tuple1(field0, field1) => {
+                        encoder.append_string("Tuple1")?;
+                        jtoo::Encode::encode_using(field0, encoder)?;
+                        jtoo::Encode::encode_using(field1, encoder)?;
+                    }
+                    Enum0::Named0 { named_field0 } => {
+                        encoder.append_string("Named0")?;
+                        encoder.open_list()?;
+                        encoder.open_list()?;
+                        encoder.append_string("named_field0")?;
+                        jtoo::Encode::encode_using(named_field0, encoder)?;
+                        encoder.close_list()?;
+                        encoder.close_list()?;
+                    }
+                    Enum0::Named1 { named_field0, named_field1 } => {
+                        encoder.append_string("Named1")?;
+                        encoder.open_list()?;
+                        encoder.open_list()?;
+                        encoder.append_string("named_field0")?;
+                        jtoo::Encode::encode_using(named_field0, encoder)?;
+                        encoder.close_list()?;
+                        encoder.open_list()?;
+                        encoder.append_string("named_field1")?;
+                        jtoo::Encode::encode_using(named_field1, encoder)?;
+                        encoder.close_list()?;
+                        encoder.close_list()?;
+                    }
+                }
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_parameter() {
+    let actual = derive_encode(quote! {
+        enum Enum0<T0> {
+            Tuple0(T0),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: jtoo::Encode> jtoo::Encode for Enum0<T0> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
+                encoder.open_list()?;
+                match self {
+                    Enum0::Tuple0(field0) => {
+                        encoder.append_string("Tuple0")?;
+                        jtoo::Encode::encode_using(field0, encoder)?;
+                    }
+                }
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_constrained_parameter() {
+    let actual = derive_encode(quote! {
+        enum Enum0<T0: Sized + Clone + Send> {
+            Tuple0(T0),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Encode> jtoo::Encode for Enum0<T0> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
+                encoder.open_list()?;
+                match self {
+                    Enum0::Tuple0(field0) => {
+                        encoder.append_string("Tuple0")?;
+                        jtoo::Encode::encode_using(field0, encoder)?;
+                    }
+                }
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_two_parameters() {
+    let actual = derive_encode(quote! {
+        enum Enum0<T0: Sized + Clone + Send, T1> {
+            Tuple0(T0, T1),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Encode, T1: jtoo::Encode> jtoo::Encode for Enum0<T0, T1> {
+            fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
+                encoder.open_list()?;
+                match self {
+                    Enum0::Tuple0(field0, field1) => {
+                        encoder.append_string("Tuple0")?;
+                        jtoo::Encode::encode_using(field0, encoder)?;
+                        jtoo::Encode::encode_using(field1, encoder)?;
+                    }
+                }
+                encoder.close_list()
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
 }
