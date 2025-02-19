@@ -121,7 +121,11 @@ impl Encoder {
     }
 
     /// `D2023`
-    #[allow(clippy::missing_errors_doc)]
+    #[allow(
+        clippy::missing_errors_doc,
+        clippy::missing_panics_doc,
+        clippy::too_many_arguments
+    )]
     pub fn append_date_time_offset(
         &mut self,
         year: u16,
@@ -202,6 +206,7 @@ impl Encoder {
         Ok(())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn push_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
         if value == 0 {
             if -1 < base10_exponent {
@@ -269,6 +274,7 @@ impl Encoder {
         self.push_decimal(value, base10_exponent)
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn push_integer(&mut self, value: i64) -> Result<(), EncodeError> {
         let digits = value.unsigned_abs().to_string();
         if value.is_negative() {

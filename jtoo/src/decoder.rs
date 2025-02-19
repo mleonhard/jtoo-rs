@@ -292,7 +292,7 @@ impl<'a> Decoder<'a> {
     }
 
     /// # Errors
-    /// Returns `Err` when the next item in the buffer is not a DateTimeOffset, or the buffer is empty.
+    /// Returns `Err` when the next item in the buffer is not a `DateTimeOffset`, or the buffer is empty.
     pub fn consume_date_time_offset(&mut self) -> Result<DateTimeOffset, DecodeError> {
         if self.consume_byte() != Some(b'D') {
             return Err(self.err(ErrorReason::ExpectedDateTimeOffset));

@@ -75,9 +75,9 @@ fn enum_encoder_calls(enum_ident: &Ident, data: &DataEnum) -> TokenStream {
             }
         };
         match &variant.fields {
-            Fields::Unit => return unit_arm,
-            Fields::Named(fields) if fields.named.is_empty() => return unit_arm,
-            Fields::Unnamed(fields) if fields.unnamed.is_empty() => return unit_arm,
+            Fields::Unit => unit_arm,
+            Fields::Named(fields) if fields.named.is_empty() => unit_arm,
+            Fields::Unnamed(fields) if fields.unnamed.is_empty() => unit_arm,
             Fields::Named(fields) => {
                 let field_idents = fields
                     .named
@@ -132,8 +132,7 @@ fn enum_encoder_calls(enum_ident: &Ident, data: &DataEnum) -> TokenStream {
     }
 }
 
-/// # Errors
-/// Returns `Err(String)` with a human-readable description of the problem.
+#[allow(clippy::missing_errors_doc)]
 pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     let input: DeriveInput = syn::parse2(stream)?;
 
@@ -160,6 +159,7 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     })
 }
 
-pub fn derive_decode(stream: TokenStream) -> Result<TokenStream, String> {
+#[allow(clippy::missing_errors_doc)]
+pub fn derive_decode(_stream: TokenStream) -> Result<TokenStream, String> {
     unimplemented!()
 }

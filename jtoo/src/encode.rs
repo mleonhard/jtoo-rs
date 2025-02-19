@@ -164,7 +164,7 @@ impl Encode for time::OffsetDateTime {
         let year = u16::try_from(self.year()).map_err(|_| EncodeError::OutOfRange)?;
         let month = u8::from(self.month());
         let offset = self.offset();
-        let offset_minutes = offset.minutes_past_hour().abs() as u8;
+        let offset_minutes = u8::try_from(offset.minutes_past_hour().abs()).unwrap();
         if offset.seconds_past_minute() != 0 {
             return Err(EncodeError::InvalidOffset);
         }
@@ -175,7 +175,7 @@ impl Encode for time::OffsetDateTime {
             self.hour(),
             self.minute(),
             self.second(),
-            self.nanosecond() as u64,
+            u64::from(self.nanosecond()),
             offset.whole_hours(),
             offset_minutes,
         )

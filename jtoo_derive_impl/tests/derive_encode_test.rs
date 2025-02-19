@@ -41,6 +41,7 @@ fn struct_named_field() {
     assert_eq!(expected.to_string(), actual.to_string());
 }
 
+#[allow(clippy::too_many_lines)]
 #[test]
 fn struct_all_field_types() {
     let actual = derive_encode(quote! {

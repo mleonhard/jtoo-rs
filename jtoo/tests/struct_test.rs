@@ -72,7 +72,7 @@ fn unit() {
     #[derive(Encode)]
     struct Struct0;
     let value = Struct0;
-    assert_eq!(value.encode(), Ok(r#"[]"#.to_string()));
+    assert_eq!(value.encode(), Ok("[]".to_string()));
 }
 
 #[test]
@@ -107,5 +107,5 @@ fn parameterized() {
     #[derive(Encode)]
     struct Struct0<T: Sized + Clone + Send>(T);
     let value = Struct0(true);
-    assert_eq!(value.encode(), Ok(r#"[T]"#.to_string()));
+    assert_eq!(value.encode(), Ok("[T]".to_string()));
 }

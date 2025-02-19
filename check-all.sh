@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 projects="jtoo \
-  jtoo_derive"
+  jtoo_derive \
+  jtoo_derive_impl"
 cd "$(dirname $0)"
 top_level_dir=$(pwd)
 set -e

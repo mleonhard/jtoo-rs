@@ -15,7 +15,7 @@ fn as_str() {
 
 #[test]
 fn into_string() {
-    let mut encoder = Encoder::new();
+    let encoder = Encoder::new();
     assert_eq!(encoder.into_string(), Err(EncodeError::Empty));
 
     let mut encoder = Encoder::new();

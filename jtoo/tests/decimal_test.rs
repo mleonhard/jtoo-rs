@@ -1,8 +1,9 @@
 use jtoo::{Encode, EncodeError, Encoder};
-use rust_decimal_macros::dec;
 
+#[cfg(feature = "rust_decimal")]
 #[test]
 fn encode() {
+    use rust_decimal_macros::dec;
     assert_eq!(
         dec!(-9_223_372_036_854_775_809).encode(),
         Err(EncodeError::OutOfRange)
