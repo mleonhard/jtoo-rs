@@ -28,7 +28,7 @@ impl<'a> Decoder<'a> {
         Ok(())
     }
 
-    fn err(&self, reason: ErrorReason) -> DecodeError {
+    pub fn err(&self, reason: ErrorReason) -> DecodeError {
         let debug_bytes = self
             .debug_bytes
             .iter()
@@ -71,8 +71,9 @@ impl<'a> Decoder<'a> {
     /// Returns `Err` when the next item in the buffer is not a byte string, or the buffer is empty.
     #[allow(clippy::manual_is_ascii_check)]
     pub fn consume_byte_string(&mut self) -> Result<Vec<u8>, DecodeError> {
-        self.consume_exact(b'B')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedByteString))?;
+        if !self.consume_exact(b'B') {
+            return Err(self.err(ErrorReason::ExpectedByteString));
+        }
         let mut result = Vec::new();
         loop {
             let d0 = match self.consume_byte() {
@@ -98,42 +99,37 @@ impl<'a> Decoder<'a> {
         Ok(result)
     }
 
-    fn consume_exact(&mut self, c: u8) -> Option<()> {
+    fn consume_exact(&mut self, c: u8) -> bool {
         if self.bytes.first() == Some(&c) {
             self.bytes = &self.bytes[1..];
-            Some(())
+            true
         } else {
-            None
+            false
         }
     }
 
-    /// # Errors
-    /// Returns `Err` when the next item in the buffer is not an integer, or the buffer is empty.
-    pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
-        let sign = if self.consume_exact(b'-').is_some() {
-            -1
-        } else {
-            1
-        };
+    fn consume_integer_part(&mut self) -> Result<Option<u64>, DecodeError> {
         let mut seen_underscore = false;
         let mut group_digit_count = 0u16;
-        let mut value = 0i64;
-        while let Some(b) = self.consume_byte() {
+        let mut value = 0u64;
+        while let Some(b) = self.bytes.first().copied() {
             match b {
                 b'0'..=b'9' => {
+                    self.consume_byte();
                     group_digit_count += 1;
-                    let d = i64::from(b - b'0');
+                    let d = u64::from(b - b'0');
                     value = value
                         .checked_mul(10)
                         .ok_or_else(|| self.err(ErrorReason::IntegerTooLarge))?;
                     value = value
-                        .checked_add(sign * d)
+                        .checked_add(d)
                         .ok_or_else(|| self.err(ErrorReason::IntegerTooLarge))?;
                     if value == 0 && 1 < group_digit_count {
                         return Err(self.err(ErrorReason::ExpectedSingleZero));
                     }
                 }
                 b'_' => {
+                    self.consume_byte();
                     if seen_underscore {
                         if group_digit_count != 3 {
                             return Err(self.err(ErrorReason::IncorrectDigitGrouping));
@@ -148,7 +144,7 @@ impl<'a> Decoder<'a> {
             }
         }
         if value == 0 && group_digit_count == 0 {
-            return Err(self.err(ErrorReason::ExpectedInteger));
+            return Ok(None);
         }
         if seen_underscore && group_digit_count != 3 {
             return Err(self.err(ErrorReason::IncorrectDigitGrouping));
@@ -156,9 +152,41 @@ impl<'a> Decoder<'a> {
         if !seen_underscore && 3 < group_digit_count {
             return Err(self.err(ErrorReason::IncorrectDigitGrouping));
         }
-        if sign == -1 && value == 0 {
-            return Err(self.err(ErrorReason::NegativeZero));
+        Ok(Some(value))
+    }
+
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not an integer, or the buffer is empty.
+    pub fn consume_integer(&mut self) -> Result<i64, DecodeError> {
+        let is_neg = self.consume_exact(b'-');
+        let Some(value) = self.consume_integer_part()? else {
+            return Err(self.err(ErrorReason::ExpectedInteger));
+        };
+        self.close_item(ErrorReason::MalformedInteger)?;
+        if is_neg {
+            if value == 0 {
+                Err(self.err(ErrorReason::NegativeZero))
+            } else if value == 9_223_372_036_854_775_808 {
+                Ok(-9_223_372_036_854_775_808)
+            } else {
+                let value = i64::try_from(value)
+                    .or_else(|_| Err(self.err(ErrorReason::IntegerTooLarge)))?;
+                Ok(value
+                    .checked_mul(-1)
+                    .ok_or_else(|| self.err(ErrorReason::IntegerTooLarge))?)
+            }
+        } else {
+            i64::try_from(value).or_else(|_| Err(self.err(ErrorReason::IntegerTooLarge)))
         }
+    }
+
+    pub fn consume_unsigned_integer(&mut self) -> Result<u64, DecodeError> {
+        if !matches!(self.bytes.first().copied(), Some(b'0'..=b'9' | b'_')) {
+            return Err(self.err(ErrorReason::ExpectedUnsignedInteger));
+        }
+        let Some(value) = self.consume_integer_part()? else {
+            return Err(self.err(ErrorReason::ExpectedUnsignedInteger));
+        };
         self.close_item(ErrorReason::MalformedInteger)?;
         Ok(value)
     }
@@ -166,8 +194,9 @@ impl<'a> Decoder<'a> {
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not an open list symbol `[`, or the buffer is empty.
     pub fn consume_list_open(&mut self) -> Result<(), DecodeError> {
-        self.consume_exact(b'[')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedList))?;
+        if !self.consume_exact(b'[') {
+            return Err(self.err(ErrorReason::ExpectedList));
+        }
         self.list_depth += 1;
         Ok(())
     }
@@ -223,8 +252,9 @@ impl<'a> Decoder<'a> {
         if self.list_depth == 0 {
             return Err(self.err(ErrorReason::NotInList));
         }
-        self.consume_exact(b']')
-            .ok_or_else(|| self.err(ErrorReason::ExpectedListEnd))?;
+        if !self.consume_exact(b']') {
+            return Err(self.err(ErrorReason::ExpectedListEnd));
+        }
         self.close_item(ErrorReason::MalformedListEnd)?;
         self.list_depth -= 1;
         Ok(())
@@ -352,6 +382,7 @@ impl<'a> Decoder<'a> {
         }
         let nanosecond = self.consume_nanosecond()?;
         let (offset_hour, offset_minute) = self.consume_offset()?;
+        self.close_item(ErrorReason::MalformedDateTimeOffset)?;
         Ok(DateTimeOffset {
             year,
             month,
@@ -366,26 +397,29 @@ impl<'a> Decoder<'a> {
     }
 
     fn consume_nanosecond(&mut self) -> Result<u64, DecodeError> {
-        if self.bytes.first().copied() != Some(b'.') {
+        if self.bytes.first().copied() == Some(b'.') {
+            self.consume_byte();
+        } else {
             return Ok(0);
         }
-        assert_eq!(self.consume_byte(), Some(b'.'));
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
         let millisecond = u64::from(100 * d0 + 10 * d1 + d2);
-        if self.bytes.first().copied() != Some(b'_') {
+        if self.bytes.first() == Some(&b'_') {
+            self.consume_byte();
+        } else {
             return Ok(1_000_000 * millisecond);
         }
-        assert_eq!(self.consume_byte(), Some(b'_'));
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
         let microsecond = u64::from(100 * d0 + 10 * d1 + d2);
-        if self.bytes.first().copied() != Some(b'_') {
+        if self.bytes.first() == Some(&b'_') {
+            self.consume_byte();
+        } else {
             return Ok(1_000_000 * millisecond + 1_000 * microsecond);
         }
-        assert_eq!(self.consume_byte(), Some(b'_'));
         let d0 = u64::from(self.consume_time_digit()?);
         let d1 = u64::from(self.consume_time_digit()?);
         let d2 = u64::from(self.consume_time_digit()?);
@@ -429,5 +463,23 @@ impl<'a> Decoder<'a> {
         } else {
             Ok((offset_hour, offset_minute))
         }
+    }
+
+    pub fn consume_timestamp_nanoseconds(&mut self) -> Result<u64, DecodeError> {
+        if !self.consume_exact(b'S') {
+            return Err(self.err(ErrorReason::ExpectedTimestamp));
+        }
+        let Some(value) = self.consume_integer_part()? else {
+            return Err(self.err(ErrorReason::MalformedTimestamp));
+        };
+        let nanosecond = self.consume_nanosecond()?;
+        let value = value
+            .checked_mul(1_000_000_000)
+            .ok_or_else(|| self.err(ErrorReason::TimestampOutOfRange))?;
+        let value = value
+            .checked_add(nanosecond)
+            .ok_or_else(|| self.err(ErrorReason::TimestampOutOfRange))?;
+        self.close_item(ErrorReason::MalformedTimestamp)?;
+        Ok(value)
     }
 }

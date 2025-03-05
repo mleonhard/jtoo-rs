@@ -159,7 +159,137 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     })
 }
 
+fn fields_decoder_calls(data: &DataStruct) -> TokenStream {
+    match &data.fields {
+        Fields::Named(ref fields) => {
+            let per_field_calls = fields.named.iter().map(|field| {
+                let field_name = field.ident.as_ref().unwrap();
+                let field_name_string = proc_macro2::Literal::string(&field_name.to_string());
+                quote_spanned! {field.span()=>
+                    decoder.consume_list_open()?;
+                    encoder.append_string(#field_name_string)?;
+                    jtoo::Encode::encode_using(&self.#field_name, encoder)?;
+                    decoder.consume_list_close()?;
+                }
+            });
+            quote! {
+                decoder.consume_list_open()?;
+                #(#per_field_calls)*
+                decoder.consume_list_close()
+            }
+        }
+        Fields::Unnamed(ref fields) => {
+            let per_field_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
+                let index = Literal::usize_unsuffixed(n);
+                quote_spanned! {field.span()=>
+                    jtoo::Encode::encode_using(&self . #index, encoder)?;
+                }
+            });
+            quote! {
+                decoder.consume_list_open()?;
+                #(#per_field_calls)*
+                decoder.consume_list_close()
+            }
+        }
+        Fields::Unit => {
+            quote! {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()
+            }
+        }
+    }
+}
+
+fn enum_decoder_calls(enum_ident: &Ident, data: &DataEnum) -> TokenStream {
+    let arms = data.variants.iter().map(|variant| {
+        let variant_ident = &variant.ident;
+        let variant_literal = Literal::string(&variant_ident.to_string());
+        let unit_arm = quote_spanned! {variant.span()=>
+            #enum_ident :: #variant_ident => {
+                encoder.append_string(#variant_literal)?;
+            }
+        };
+        match &variant.fields {
+            Fields::Unit => unit_arm,
+            Fields::Named(fields) if fields.named.is_empty() => unit_arm,
+            Fields::Unnamed(fields) if fields.unnamed.is_empty() => unit_arm,
+            Fields::Named(fields) => {
+                let field_idents = fields
+                    .named
+                    .iter()
+                    .map(|field| field.ident.as_ref().unwrap());
+                let encoder_calls = fields.named.iter().map(|field| {
+                    let field_ident = field.ident.as_ref().unwrap();
+                    let field_literal = Literal::string(&field_ident.to_string());
+                    quote_spanned! {field.span()=>
+                        encoder.open_list()?;
+                        encoder.append_string(#field_literal)?;
+                        jtoo::Encode::encode_using(#field_ident, encoder)?;
+                        encoder.close_list()?;
+                    }
+                });
+                quote_spanned! {variant.span()=>
+                    #enum_ident :: #variant_ident { #(#field_idents ),* } => {
+                        encoder.append_string(#variant_literal)?;
+                        encoder.open_list()?;
+                        #(#encoder_calls)*
+                        encoder.close_list()?;
+                    }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let field_idents = fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(n, field)| format_ident!("field{}", n, span = field.ident.span()));
+                let encoder_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
+                    let field_ident = format_ident!("field{}", n, span = field.ident.span());
+                    quote_spanned! {field.span()=>
+                        jtoo::Encode::encode_using(#field_ident, encoder)?;
+                    }
+                });
+                quote_spanned! {variant.span()=>
+                    #enum_ident :: #variant_ident ( #(#field_idents ),* ) => {
+                        encoder.append_string(#variant_literal)?;
+                        #(#encoder_calls)*
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        encoder.open_list()?;
+        match self {
+            #(#arms)*
+        }
+        encoder.close_list()
+    }
+}
+
 #[allow(clippy::missing_errors_doc)]
-pub fn derive_decode(_stream: TokenStream) -> Result<TokenStream, String> {
-    unimplemented!()
+pub fn derive_decode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
+    let input: DeriveInput = syn::parse2(stream)?;
+
+    // Add a bound `T: Encode` to every type parameter T.
+    let mut generics = input.generics;
+    for param in &mut generics.params {
+        if let GenericParam::Type(ref mut type_param) = *param {
+            type_param.bounds.push(parse_quote!(jtoo::Encode));
+        }
+    }
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let decoder_calls = match &input.data {
+        Data::Struct(data) => fields_decoder_calls(data),
+        Data::Enum(data) => enum_decoder_calls(&input.ident, data),
+        Data::Union(_) => quote! { compile_error!("This macro does not support union types."); },
+    };
+    let struct_name = input.ident;
+    Ok(quote! {
+        impl #impl_generics jtoo::Decode for #struct_name #ty_generics #where_clause {
+            fn decode_using(&self, decoder: &mut jtoo::Decoder) -> Result<(), jtoo::EncodeError> {
+                #decoder_calls
+            }
+        }
+    })
 }

@@ -1,6 +1,7 @@
 use crate::decoder::Decoder;
 use crate::escape_ascii;
 use core::fmt::Debug;
+use std::time::{Duration, SystemTime};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorReason {
@@ -15,6 +16,8 @@ pub enum ErrorReason {
     ExpectedListSeparator,
     ExpectedSingleZero,
     ExpectedString,
+    ExpectedTimestamp,
+    ExpectedUnsignedInteger,
     HourOutOfRange,
     IncompleteEscapeSequence,
     IncorrectDigitGrouping,
@@ -30,12 +33,14 @@ pub enum ErrorReason {
     MalformedOffset,
     MalformedString,
     MalformedTime,
+    MalformedTimestamp,
     MinuteOutOfRange,
     MonthOutOfRange,
     NegativeZero,
     NotInList,
     NotUtf8,
     SecondOutOfRange,
+    TimestampOutOfRange,
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
@@ -75,5 +80,105 @@ pub trait Decode {
     {
         let mut decoder = Decoder::new(bytes);
         Self::decode_using(&mut decoder)
+    }
+}
+impl Decode for bool {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_bool()
+    }
+}
+impl Decode for i8 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for u8 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_unsigned_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for i16 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for u16 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_unsigned_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for i32 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for u32 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_unsigned_integer()?;
+        Self::try_from(value).map_err(|_| decoder.err(ErrorReason::IntegerTooLarge))
+    }
+}
+impl Decode for i64 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_integer()
+    }
+}
+impl Decode for u64 {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_unsigned_integer()
+    }
+}
+impl Decode for Box<str> {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let s = decoder.consume_string()?;
+        Ok(s.into_boxed_str())
+    }
+}
+impl Decode for String {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_string()
+    }
+}
+impl<T: Decode> Decode for Option<T> {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_list_open()?;
+        let value = if decoder.has_another_list_item() {
+            Some(T::decode_using(decoder)?)
+        } else {
+            None
+        };
+        decoder.consume_list_close()?;
+        Ok(value)
+    }
+}
+impl<T: Decode> Decode for Box<[T]> {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let result = <Vec<T>>::decode_using(decoder)?;
+        Ok(result.into_boxed_slice())
+    }
+}
+impl<T: Decode> Decode for Vec<T> {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_list_open()?;
+        let mut result = Vec::new();
+        if decoder.has_another_list_item() {
+            let value = T::decode_using(decoder)?;
+            result.push(value);
+        }
+        decoder.consume_list_close()?;
+        Ok(result)
+    }
+}
+impl Decode for SystemTime {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let ts = decoder.consume_timestamp_nanoseconds()?;
+        SystemTime::UNIX_EPOCH
+            .checked_add(Duration::from_nanos(ts))
+            .ok_or_else(|| decoder.err(ErrorReason::TimestampOutOfRange))
     }
 }

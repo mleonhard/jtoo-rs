@@ -1,9 +1,15 @@
-use jtoo::{Encode, EncodeError, Encoder};
+use jtoo::{Decode, Encode, EncodeError, Encoder};
 
 #[test]
 fn encode() {
     assert_eq!(true.encode().unwrap().as_str(), "T");
     assert_eq!(false.encode().unwrap().as_str(), "F");
+}
+
+#[test]
+fn decode() {
+    assert_eq!(bool::decode(b"T").unwrap(), true);
+    assert_eq!(bool::decode(b"F").unwrap(), false);
 }
 
 #[test]

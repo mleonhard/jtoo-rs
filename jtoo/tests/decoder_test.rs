@@ -137,6 +137,60 @@ fn consume_integer() {
 }
 
 #[test]
+fn consume_unsigned_integer() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"\"a\"", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"Y", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"!", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"-", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"-1", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"0", Ok(0)),
+        (b"1", Ok(1)),
+        (b"12", Ok(12)),
+        (b"123", Ok(123)),
+        (b"1_234", Ok(1_234)),
+        (b"12_345", Ok(12_345)),
+        (b"123_456", Ok(123_456)),
+        (b"1_234_567", Ok(1_234_567)),
+        (b"18_446_744_073_709_551_615", Ok(u64::MAX)),
+        (
+            b"18_446_744_073_709_551_616",
+            Err(ErrorReason::IntegerTooLarge),
+        ),
+        (
+            b"18_500_000_000_000_000_000",
+            Err(ErrorReason::IntegerTooLarge),
+        ),
+        (b"00", Err(ErrorReason::ExpectedSingleZero)),
+        (b"1000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"_1", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1__", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_0", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_00", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_0000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_000_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_000_0", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_000_00", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_000_0000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"1_0000_000", Err(ErrorReason::IncorrectDigitGrouping)),
+    ] {
+        let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        let result = decoder.consume_unsigned_integer();
+        match expected {
+            Ok(expected_value) => {
+                assert_eq!(result, Ok(expected_value), "{msg}");
+                decoder.close().expect(&msg);
+            }
+            Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason, "{msg}"),
+        }
+    }
+}
+
+#[test]
 fn consume_string() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedString)),
@@ -344,7 +398,7 @@ fn consume_date_time_offset() {
         ),
         (
             b"D0001-01-01T00:00:00+01Z",
-            Err(ErrorReason::DataNotConsumed),
+            Err(ErrorReason::MalformedDateTimeOffset),
         ),
     ] {
         let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
@@ -362,6 +416,62 @@ fn consume_date_time_offset() {
                 };
                 assert_eq!(e.reason, expected_reason, "{msg}");
             }
+        }
+    }
+}
+
+#[test]
+fn consume_timestamp_nanoseconds() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(ErrorReason::ExpectedTimestamp)),
+        (b"\"a\"", Err(ErrorReason::ExpectedTimestamp)),
+        (b"Y", Err(ErrorReason::ExpectedTimestamp)),
+        (b"!", Err(ErrorReason::ExpectedTimestamp)),
+        (b"1", Err(ErrorReason::ExpectedTimestamp)),
+        (b"S", Err(ErrorReason::MalformedTimestamp)),
+        (b"S-1", Err(ErrorReason::MalformedTimestamp)),
+        (b"S0", Ok(0)),
+        (b"S1", Ok(1_000_000_000)),
+        (b"S12", Ok(12_000_000_000)),
+        (b"S123", Ok(123_000_000_000)),
+        (b"S1_234", Ok(1_234_000_000_000)),
+        (b"S12_345", Ok(12_345_000_000_000)),
+        (b"S123_456", Ok(123_456_000_000_000)),
+        (b"S1_234_567", Ok(1_234_567_000_000_000)),
+        (b"S0.001", Ok(1_000_000)),
+        (b"S0.000_001", Ok(1_000)),
+        (b"S0.000_000_001", Ok(1)),
+        (b"S18_446_744_073.709_551_615", Ok(u64::MAX)),
+        (
+            b"S18_446_744_073.709_551_616",
+            Err(ErrorReason::TimestampOutOfRange),
+        ),
+        (b"S18_446_744_074", Err(ErrorReason::TimestampOutOfRange)),
+        (b"S18_500_000_000", Err(ErrorReason::TimestampOutOfRange)),
+        (b"S00", Err(ErrorReason::ExpectedSingleZero)),
+        (b"S1000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S_1", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1__", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_0", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_00", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_0000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_000_", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_000_0", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_000_00", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_000_0000", Err(ErrorReason::IncorrectDigitGrouping)),
+        (b"S1_0000_000", Err(ErrorReason::IncorrectDigitGrouping)),
+    ] {
+        let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        let result = decoder.consume_timestamp_nanoseconds();
+        match expected {
+            Ok(expected_value) => {
+                assert_eq!(result, Ok(expected_value), "{msg}");
+                decoder.close().expect(&msg);
+            }
+            Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason, "{msg}"),
         }
     }
 }
