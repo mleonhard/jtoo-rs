@@ -55,6 +55,6 @@ impl DateTimeOffset {
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn microsecond(&self) -> u32 {
-        u32::try_from(self.nanosecond / 1_000).unwrap()
+        self.nanosecond / 1_000
     }
 }

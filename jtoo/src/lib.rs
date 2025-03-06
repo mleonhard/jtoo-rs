@@ -45,12 +45,14 @@
 #![forbid(unsafe_code)]
 
 mod date_time_offset;
+mod decimal;
 mod decode;
 mod decoder;
 mod encode;
 mod encoder;
 
 pub use date_time_offset::*;
+pub use decimal::*;
 pub use decode::*;
 pub use decoder::*;
 pub use encode::*;

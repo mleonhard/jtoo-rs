@@ -1,3 +1,4 @@
+use crate::decimal::Decimal;
 use crate::EncodeError;
 use std::iter::repeat;
 use std::ops::Rem;
@@ -269,9 +270,9 @@ impl Encoder {
 
     /// `1.0`, `1_234.567_8`, `0.01`
     #[allow(clippy::missing_errors_doc)]
-    pub fn append_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
+    pub fn append_decimal(&mut self, value: Decimal) -> Result<(), EncodeError> {
         self.prepare_for_new_value()?;
-        self.push_decimal(value, base10_exponent)
+        self.push_decimal(value.mantissa, value.exponent)
     }
 
     #[allow(clippy::unnecessary_wraps)]

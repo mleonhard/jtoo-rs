@@ -1,3 +1,4 @@
+use crate::decimal::Decimal;
 use crate::{DateTimeOffset, DecodeError, ErrorReason};
 
 #[derive(Debug)]
@@ -28,6 +29,7 @@ impl<'a> Decoder<'a> {
         Ok(())
     }
 
+    #[must_use]
     pub fn err(&self, reason: ErrorReason) -> DecodeError {
         let debug_bytes = self
             .debug_bytes
@@ -169,17 +171,19 @@ impl<'a> Decoder<'a> {
             } else if value == 9_223_372_036_854_775_808 {
                 Ok(-9_223_372_036_854_775_808)
             } else {
-                let value = i64::try_from(value)
-                    .or_else(|_| Err(self.err(ErrorReason::IntegerTooLarge)))?;
+                let value =
+                    i64::try_from(value).map_err(|_| self.err(ErrorReason::IntegerTooLarge))?;
                 Ok(value
                     .checked_mul(-1)
                     .ok_or_else(|| self.err(ErrorReason::IntegerTooLarge))?)
             }
         } else {
-            i64::try_from(value).or_else(|_| Err(self.err(ErrorReason::IntegerTooLarge)))
+            i64::try_from(value).map_err(|_| self.err(ErrorReason::IntegerTooLarge))
         }
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not an unsigned integer, or the buffer is empty.
     pub fn consume_unsigned_integer(&mut self) -> Result<u64, DecodeError> {
         if !matches!(self.bytes.first().copied(), Some(b'0'..=b'9' | b'_')) {
             return Err(self.err(ErrorReason::ExpectedUnsignedInteger));
@@ -263,6 +267,7 @@ impl<'a> Decoder<'a> {
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not a string, or the buffer is empty.
     #[allow(clippy::missing_panics_doc)]
+    #[allow(clippy::too_many_lines)]
     pub fn consume_string(&mut self) -> Result<String, DecodeError> {
         match self.bytes.first() {
             Some(b'"') => {}
@@ -319,6 +324,161 @@ impl<'a> Decoder<'a> {
         self.consume_bytes(len + 1);
         self.close_item(ErrorReason::MalformedString)?;
         Ok(value)
+    }
+
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a decimal, or the buffer is empty.
+    #[allow(clippy::too_many_lines)]
+    pub fn consume_decimal(&mut self) -> Result<Decimal, DecodeError> {
+        enum FormatChecker {
+            Start0,
+            Start1,
+            Start2,
+            Start3,
+            Left0,
+            Left1,
+            Left2,
+            Left3,
+            Right0,
+            Right1,
+            Right2,
+            Right3,
+        }
+        #[allow(clippy::match_same_arms)]
+        impl FormatChecker {
+            pub fn digit(&mut self) -> Result<(), ErrorReason> {
+                *self = match self {
+                    FormatChecker::Start0 => FormatChecker::Start1,
+                    FormatChecker::Start1 => FormatChecker::Start2,
+                    FormatChecker::Start2 => FormatChecker::Start3,
+                    FormatChecker::Start3 => return Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Left0 => FormatChecker::Left1,
+                    FormatChecker::Left1 => FormatChecker::Left2,
+                    FormatChecker::Left2 => FormatChecker::Left3,
+                    FormatChecker::Left3 => return Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Right0 => FormatChecker::Right1,
+                    FormatChecker::Right1 => FormatChecker::Right2,
+                    FormatChecker::Right2 => FormatChecker::Right3,
+                    FormatChecker::Right3 => return Err(ErrorReason::IncorrectDigitGrouping),
+                };
+                Ok(())
+            }
+            pub fn underscore(&mut self) -> Result<(), ErrorReason> {
+                *self = match self {
+                    FormatChecker::Start0 => return Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Start1 | FormatChecker::Start2 | FormatChecker::Start3 => {
+                        FormatChecker::Left0
+                    }
+                    FormatChecker::Left0 | FormatChecker::Left1 | FormatChecker::Left2 => {
+                        return Err(ErrorReason::IncorrectDigitGrouping)
+                    }
+                    FormatChecker::Left3 => FormatChecker::Left0,
+                    FormatChecker::Right0 | FormatChecker::Right1 | FormatChecker::Right2 => {
+                        return Err(ErrorReason::IncorrectDigitGrouping)
+                    }
+                    FormatChecker::Right3 => FormatChecker::Right0,
+                };
+                Ok(())
+            }
+            pub fn period(&mut self) -> Result<(), ErrorReason> {
+                *self = match self {
+                    FormatChecker::Start0 => return Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Start1 | FormatChecker::Start2 | FormatChecker::Start3 => {
+                        FormatChecker::Right0
+                    }
+                    FormatChecker::Left0 | FormatChecker::Left1 | FormatChecker::Left2 => {
+                        return Err(ErrorReason::IncorrectDigitGrouping)
+                    }
+                    FormatChecker::Left3 => FormatChecker::Right0,
+                    FormatChecker::Right0
+                    | FormatChecker::Right1
+                    | FormatChecker::Right2
+                    | FormatChecker::Right3 => return Err(ErrorReason::MalformedDecimal),
+                };
+                Ok(())
+            }
+            pub fn finish(&mut self) -> Result<(), ErrorReason> {
+                match self {
+                    FormatChecker::Start0 => Err(ErrorReason::ExpectedDecimal),
+                    FormatChecker::Start1 => Ok(()),
+                    FormatChecker::Start2 => Ok(()),
+                    FormatChecker::Start3 => Ok(()),
+                    FormatChecker::Left0 => Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Left1 => Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Left2 => Err(ErrorReason::IncorrectDigitGrouping),
+                    FormatChecker::Left3 => Ok(()),
+                    FormatChecker::Right0 => Err(ErrorReason::MalformedDecimal),
+                    FormatChecker::Right1 => Ok(()),
+                    FormatChecker::Right2 => Ok(()),
+                    FormatChecker::Right3 => Ok(()),
+                }
+            }
+        }
+        let mut format_checker = FormatChecker::Start0;
+        let is_neg = self.consume_exact(b'-');
+        let mut seen_period = false;
+        let mut mantissa = 0u64;
+        let mut last_digit = 0u64;
+        let mut exponent = 0i8;
+        while let Some(b) = self.bytes.first().copied() {
+            match b {
+                b'0'..=b'9' => {
+                    self.consume_byte();
+                    format_checker.digit().map_err(|reason| self.err(reason))?;
+                    mantissa = mantissa
+                        .checked_mul(10)
+                        .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+                    mantissa = mantissa
+                        .checked_add(last_digit)
+                        .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+                    if seen_period {
+                        exponent = exponent
+                            .checked_add(-1)
+                            .ok_or_else(|| self.err(ErrorReason::DecimalExponentOutOfRange))?;
+                    }
+                    last_digit = u64::from(b - b'0');
+                }
+                b'_' => {
+                    self.consume_byte();
+                    format_checker
+                        .underscore()
+                        .map_err(|reason| self.err(reason))?;
+                }
+                b'.' => {
+                    format_checker.period().map_err(|reason| self.err(reason))?;
+                    self.consume_byte();
+                    seen_period = true;
+                }
+                _ => break,
+            }
+        }
+        format_checker.finish().map_err(|reason| self.err(reason))?;
+        if last_digit == 0 && exponent == -1 {
+            exponent = 0;
+        } else {
+            mantissa = mantissa
+                .checked_mul(10)
+                .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+            mantissa = mantissa
+                .checked_add(last_digit)
+                .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+        }
+        self.close_item(ErrorReason::MalformedDecimal)?;
+        if is_neg {
+            match mantissa {
+                0 => return Err(self.err(ErrorReason::NegativeZero)),
+                9_223_372_036_854_775_808 => {
+                    return Ok(Decimal::new(-9_223_372_036_854_775_808, exponent))
+                }
+                _ => {}
+            }
+        }
+        let mantissa = i64::try_from(mantissa)
+            .map_err(|_| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+        let mantissa = mantissa
+            .checked_mul(if is_neg { -1 } else { 1 })
+            .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
+        Ok(Decimal::new(mantissa, exponent))
     }
 
     /// # Errors
@@ -465,6 +625,8 @@ impl<'a> Decoder<'a> {
         }
     }
 
+    /// # Errors
+    /// Returns `Err` when the next item in the buffer is not a timestamp, or the buffer is empty.
     pub fn consume_timestamp_nanoseconds(&mut self) -> Result<u64, DecodeError> {
         if !self.consume_exact(b'S') {
             return Err(self.err(ErrorReason::ExpectedTimestamp));

@@ -8,8 +8,8 @@ fn encode() {
 
 #[test]
 fn decode() {
-    assert_eq!(bool::decode(b"T").unwrap(), true);
-    assert_eq!(bool::decode(b"F").unwrap(), false);
+    assert!(bool::decode(b"T").unwrap());
+    assert!(!bool::decode(b"F").unwrap());
 }
 
 #[test]
