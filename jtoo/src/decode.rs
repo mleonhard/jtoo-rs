@@ -182,3 +182,23 @@ impl Decode for SystemTime {
             .ok_or_else(|| decoder.err(ErrorReason::TimestampOutOfRange))
     }
 }
+#[cfg(feature = "time")]
+impl Decode for time::OffsetDateTime {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let value = decoder.consume_date_time_offset()?;
+        let year = i32::from(value.year);
+        let month = time::Month::try_from(value.month)
+            .map_err(|_| decoder.err(ErrorReason::MalformedDate))?;
+        let date = time::Date::from_calendar_date(year, month, value.day)
+            .map_err(|_| decoder.err(ErrorReason::MalformedDate))?;
+        let time =
+            time::Time::from_hms_nano(value.hour, value.minute, value.second, value.nanosecond)
+                .map_err(|_| decoder.err(ErrorReason::MalformedTime))?;
+        let offset_minute = value.offset_hour.signum()
+            * i8::try_from(value.offset_minute)
+                .map_err(|_| decoder.err(ErrorReason::MalformedDateTimeOffset))?;
+        let offset = time::UtcOffset::from_hms(value.offset_hour, offset_minute, 0)
+            .map_err(|_| decoder.err(ErrorReason::MalformedDateTimeOffset))?;
+        Ok(time::OffsetDateTime::new_in_offset(date, time, offset))
+    }
+}

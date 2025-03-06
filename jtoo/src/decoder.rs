@@ -396,7 +396,7 @@ impl<'a> Decoder<'a> {
         })
     }
 
-    fn consume_nanosecond(&mut self) -> Result<u64, DecodeError> {
+    fn consume_nanosecond(&mut self) -> Result<u32, DecodeError> {
         if self.bytes.first().copied() == Some(b'.') {
             self.consume_byte();
         } else {
@@ -405,7 +405,7 @@ impl<'a> Decoder<'a> {
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
-        let millisecond = u64::from(100 * d0 + 10 * d1 + d2);
+        let millisecond = u32::from(100 * d0 + 10 * d1 + d2);
         if self.bytes.first() == Some(&b'_') {
             self.consume_byte();
         } else {
@@ -414,15 +414,15 @@ impl<'a> Decoder<'a> {
         let d0 = u16::from(self.consume_time_digit()?);
         let d1 = u16::from(self.consume_time_digit()?);
         let d2 = u16::from(self.consume_time_digit()?);
-        let microsecond = u64::from(100 * d0 + 10 * d1 + d2);
+        let microsecond = u32::from(100 * d0 + 10 * d1 + d2);
         if self.bytes.first() == Some(&b'_') {
             self.consume_byte();
         } else {
             return Ok(1_000_000 * millisecond + 1_000 * microsecond);
         }
-        let d0 = u64::from(self.consume_time_digit()?);
-        let d1 = u64::from(self.consume_time_digit()?);
-        let d2 = u64::from(self.consume_time_digit()?);
+        let d0 = u32::from(self.consume_time_digit()?);
+        let d1 = u32::from(self.consume_time_digit()?);
+        let d2 = u32::from(self.consume_time_digit()?);
         let nanosecond = 100 * d0 + 10 * d1 + d2;
         Ok(1_000_000 * millisecond + 1_000 * microsecond + nanosecond)
     }
@@ -472,7 +472,7 @@ impl<'a> Decoder<'a> {
         let Some(value) = self.consume_integer_part()? else {
             return Err(self.err(ErrorReason::MalformedTimestamp));
         };
-        let nanosecond = self.consume_nanosecond()?;
+        let nanosecond = u64::from(self.consume_nanosecond()?);
         let value = value
             .checked_mul(1_000_000_000)
             .ok_or_else(|| self.err(ErrorReason::TimestampOutOfRange))?;

@@ -6,7 +6,7 @@ pub struct DateTimeOffset {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
-    pub nanosecond: u64,
+    pub nanosecond: u32,
     pub offset_hour: i8,
     pub offset_minute: u8, // Only one country has used a -00xx timezone, Liberia.  They stopped in 1972.
 }
