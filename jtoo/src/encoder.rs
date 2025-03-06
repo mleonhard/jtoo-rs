@@ -134,7 +134,7 @@ impl Encoder {
         hour: u8,
         minute: u8,
         second: u8,
-        nanosecond: u64,
+        nanosecond: u32,
         offset_hour: i8,
         offset_minute: u8,
     ) -> Result<(), EncodeError> {

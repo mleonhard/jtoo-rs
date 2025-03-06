@@ -1,4 +1,5 @@
 use crate::encoder::Encoder;
+use crate::DateTimeOffset;
 use std::time::SystemTime;
 
 #[allow(clippy::module_name_repetitions)]
@@ -158,6 +159,21 @@ impl Encode for rust_decimal::Decimal {
         encoder.append_decimal(mantissa, exp)
     }
 }
+impl Encode for DateTimeOffset {
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        encoder.append_date_time_offset(
+            self.year,
+            self.month,
+            self.day,
+            self.hour,
+            self.minute,
+            self.second,
+            self.nanosecond,
+            self.offset_hour,
+            self.offset_minute,
+        )
+    }
+}
 #[cfg(feature = "time")]
 impl Encode for time::OffsetDateTime {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
@@ -175,7 +191,7 @@ impl Encode for time::OffsetDateTime {
             self.hour(),
             self.minute(),
             self.second(),
-            u64::from(self.nanosecond()),
+            self.nanosecond(),
             offset.whole_hours(),
             offset_minutes,
         )

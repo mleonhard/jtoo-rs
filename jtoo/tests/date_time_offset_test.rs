@@ -10,132 +10,173 @@ fn microsecond() {
     assert_eq!(999_999, DateTimeOffset::MAX.microsecond());
 }
 
-#[cfg(feature = "time")]
 #[test]
 fn decode() {
-    use time::{Date, Month, OffsetDateTime, Time, UtcOffset};
     assert_eq!(
-        OffsetDateTime::decode(b"D0001-01-01T00:00:00-2459")
+        DateTimeOffset::decode(b"D0001-01-01T00:00:00-2459")
             .unwrap_err()
             .reason,
         ErrorReason::TimezoneOffsetHourOutOfRange
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D0000-01-01T00:00:00-2359")
+        DateTimeOffset::decode(b"D0000-01-01T00:00:00-2359")
             .unwrap_err()
             .reason,
         ErrorReason::YearOutOfRange
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D0001-01-01T00:00:00-2359").unwrap(),
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(1, Month::January, 1).unwrap(),
-            Time::from_hms(0, 0, 0).unwrap(),
-            UtcOffset::from_hms(-23, 59, 0).unwrap()
-        )
+        DateTimeOffset::decode(b"D0001-01-01T00:00:00-2359").unwrap(),
+        DateTimeOffset {
+            year: 1,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
+            offset_hour: -23,
+            offset_minute: 59,
+        }
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D1970-01-01T00:00:00Z").unwrap(),
-        OffsetDateTime::UNIX_EPOCH
+        DateTimeOffset::decode(b"D1970-01-01T00:00:00Z").unwrap(),
+        DateTimeOffset::UNIX_EPOCH
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D2025-02-17T02:03:04+0506").unwrap(),
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(2025, Month::February, 17).unwrap(),
-            Time::from_hms(2, 3, 4).unwrap(),
-            UtcOffset::from_hms(5, 6, 0).unwrap()
-        )
+        DateTimeOffset::decode(b"D2025-02-17T02:03:04+0506").unwrap(),
+        DateTimeOffset {
+            year: 2025,
+            month: 2,
+            day: 17,
+            hour: 2,
+            minute: 3,
+            second: 4,
+            nanosecond: 0,
+            offset_hour: 5,
+            offset_minute: 6,
+        }
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D9999-12-31T23:59:59.999_999_999+2359").unwrap(),
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(9999, Month::December, 31).unwrap(),
-            Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
-            UtcOffset::from_hms(23, 59, 0).unwrap()
-        )
+        DateTimeOffset::decode(b"D9999-12-31T23:59:59.999_999_999+2359").unwrap(),
+        DateTimeOffset {
+            year: 9999,
+            month: 12,
+            day: 31,
+            hour: 23,
+            minute: 59,
+            second: 59,
+            nanosecond: 999_999_999,
+            offset_hour: 23,
+            offset_minute: 59,
+        }
     );
     assert_eq!(
-        OffsetDateTime::decode(b"D9999-12-31T23:59:59.999_999_999+2459")
+        DateTimeOffset::decode(b"D9999-12-31T23:59:59.999_999_999+2459")
             .unwrap_err()
             .reason,
         ErrorReason::TimezoneOffsetHourOutOfRange
     );
 }
 
-#[cfg(feature = "time")]
 #[test]
 fn encode() {
-    use time::{Date, Month, OffsetDateTime, Time, UtcOffset};
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(1, Month::January, 1).unwrap(),
-            Time::from_hms(0, 0, 0).unwrap(),
-            UtcOffset::from_hms(-24, 59, 0).unwrap()
-        )
+        DateTimeOffset {
+            year: 1,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
+            offset_hour: -24,
+            offset_minute: 59,
+        }
         .encode(),
         Err(EncodeError::InvalidOffset)
     );
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(0, Month::January, 1).unwrap(),
-            Time::from_hms(0, 0, 0).unwrap(),
-            UtcOffset::from_hms(-23, 59, 0).unwrap()
-        )
+        DateTimeOffset {
+            year: 0,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
+            offset_hour: -23,
+            offset_minute: 59,
+        }
         .encode(),
         Err(EncodeError::InvalidYear)
     );
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(1, Month::January, 1).unwrap(),
-            Time::from_hms(0, 0, 0).unwrap(),
-            UtcOffset::from_hms(-23, 59, 0).unwrap()
-        )
+        DateTimeOffset {
+            year: 1,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            nanosecond: 0,
+            offset_hour: -23,
+            offset_minute: 59,
+        }
         .encode()
         .unwrap()
         .as_str(),
         "D0001-01-01T00:00:00-2359"
     );
     assert_eq!(
-        OffsetDateTime::UNIX_EPOCH.encode().unwrap().as_str(),
+        DateTimeOffset::UNIX_EPOCH.encode().unwrap().as_str(),
         "D1970-01-01T00:00:00Z"
     );
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(2025, Month::February, 17).unwrap(),
-            Time::from_hms(2, 3, 4).unwrap(),
-            UtcOffset::from_hms(5, 6, 0).unwrap()
-        )
+        DateTimeOffset {
+            year: 2025,
+            month: 2,
+            day: 17,
+            hour: 2,
+            minute: 3,
+            second: 4,
+            nanosecond: 0,
+            offset_hour: 5,
+            offset_minute: 6,
+        }
         .encode()
         .unwrap()
         .as_str(),
         "D2025-02-17T02:03:04+0506"
     );
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(9999, Month::December, 31).unwrap(),
-            Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
-            UtcOffset::from_hms(23, 59, 0).unwrap()
-        )
+        DateTimeOffset {
+            year: 9999,
+            month: 12,
+            day: 31,
+            hour: 23,
+            minute: 59,
+            second: 59,
+            nanosecond: 999_999_999,
+            offset_hour: 23,
+            offset_minute: 59,
+        }
         .encode()
         .unwrap()
         .as_str(),
         "D9999-12-31T23:59:59.999_999_999+2359"
     );
     assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(9999, Month::December, 31).unwrap(),
-            Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
-            UtcOffset::from_hms(24, 59, 0).unwrap()
-        )
-        .encode(),
-        Err(EncodeError::InvalidOffset)
-    );
-    assert_eq!(
-        OffsetDateTime::new_in_offset(
-            Date::from_calendar_date(9999, Month::December, 31).unwrap(),
-            Time::from_hms_nano(23, 59, 59, 999_999_999).unwrap(),
-            UtcOffset::from_hms(23, 59, 1).unwrap()
-        )
+        DateTimeOffset {
+            year: 9999,
+            month: 12,
+            day: 31,
+            hour: 23,
+            minute: 59,
+            second: 59,
+            nanosecond: 999_999_999,
+            offset_hour: 24,
+            offset_minute: 59,
+        }
         .encode(),
         Err(EncodeError::InvalidOffset)
     );

@@ -1,5 +1,5 @@
 use crate::decoder::Decoder;
-use crate::escape_ascii;
+use crate::{escape_ascii, DateTimeOffset};
 use core::fmt::Debug;
 use std::time::{Duration, SystemTime};
 
@@ -180,6 +180,11 @@ impl Decode for SystemTime {
         SystemTime::UNIX_EPOCH
             .checked_add(Duration::from_nanos(ts))
             .ok_or_else(|| decoder.err(ErrorReason::TimestampOutOfRange))
+    }
+}
+impl Decode for DateTimeOffset {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        decoder.consume_date_time_offset()
     }
 }
 #[cfg(feature = "time")]
