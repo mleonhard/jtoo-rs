@@ -1,4 +1,6 @@
-use jtoo::{DateTimeOffset, Decode, Encode, EncodeError, Encoder, ErrorReason};
+use jtoo::{
+    escape_ascii, DateTimeOffset, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason,
+};
 
 #[test]
 fn millisecond() {
@@ -344,4 +346,190 @@ fn in_list() {
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
     assert_eq!(encoder.as_str(), Ok("[D0001-01-01T00:00:00Z,T]"));
+}
+
+#[test]
+#[allow(clippy::zero_prefixed_literal)]
+#[allow(clippy::too_many_lines)]
+fn consume() {
+    for (bytes, expected) in [
+        (b"".as_slice(), Err(ErrorReason::ExpectedDateTimeOffset)),
+        (b"x", Err(ErrorReason::ExpectedDateTimeOffset)),
+        (b"D", Err(ErrorReason::MalformedDate)),
+        (b"D1", Err(ErrorReason::MalformedDate)),
+        (b"D19", Err(ErrorReason::MalformedDate)),
+        (b"D197", Err(ErrorReason::MalformedDate)),
+        (b"D1970-", Err(ErrorReason::MalformedDate)),
+        (b"D1970-0", Err(ErrorReason::MalformedDate)),
+        (b"D1970-01", Err(ErrorReason::MalformedDate)),
+        (b"D1970-01-", Err(ErrorReason::MalformedDate)),
+        (b"D1970-01-0", Err(ErrorReason::MalformedDate)),
+        (b"D1970-01-01", Err(ErrorReason::MalformedDateTimeOffset)),
+        (b"D1970-01-01T", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T0", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:0", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:00", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:00:", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:00:0", Err(ErrorReason::MalformedTime)),
+        (
+            b"D1970-01-01T00:00:00",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (b"D1970-01-01T00:00:00Z", Ok(DateTimeOffset::UNIX_EPOCH)),
+        (b"D1970-01-01T00:00:00.", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:00:00.0", Err(ErrorReason::MalformedTime)),
+        (b"D1970-01-01T00:00:00.00", Err(ErrorReason::MalformedTime)),
+        (
+            b"D1970-01-01T00:00:00.000",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (b"D1970-01-01T00:00:00.000Z", Ok(DateTimeOffset::UNIX_EPOCH)),
+        (
+            b"D1970-01-01T00:00:00.000_",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_0",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_00",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000Z",
+            Ok(DateTimeOffset::UNIX_EPOCH),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_0",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_00",
+            Err(ErrorReason::MalformedTime),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_000",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_000Z",
+            Ok(DateTimeOffset::UNIX_EPOCH),
+        ),
+        (b"D1970-01-01T00:00:00+", Err(ErrorReason::MalformedOffset)),
+        (b"D1970-01-01T00:00:00-", Err(ErrorReason::MalformedOffset)),
+        (b"D1970-01-01T00:00:00+0", Err(ErrorReason::MalformedOffset)),
+        (b"D1970-01-01T00:00:00-0", Err(ErrorReason::MalformedOffset)),
+        (
+            b"D1970-01-01T00:00:00+00",
+            Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
+        ),
+        (
+            b"D1970-01-01T00:00:00-00",
+            Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
+        ),
+        (
+            b"D1970-01-01T00:00:00-0100",
+            Err(ErrorReason::ZeroTimeZoneMinutesShouldBeOmitted),
+        ),
+        (
+            b"D1970-01-01T00:00:00+000",
+            Err(ErrorReason::MalformedOffset),
+        ),
+        (
+            b"D1970-01-01T00:00:00-000",
+            Err(ErrorReason::MalformedOffset),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_000+0000",
+            Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
+        ),
+        (
+            b"D1970-01-01T00:00:00.000_000_000-0000",
+            Err(ErrorReason::ZeroTimeZoneOffsetShouldBeZ),
+        ),
+        (
+            b"D1234-05-06T07:08:09.123_456_768+0912",
+            Ok(DateTimeOffset {
+                year: 1234,
+                month: 5,
+                day: 6,
+                hour: 7,
+                minute: 8,
+                second: 9,
+                nanosecond: 123_456_768,
+                offset_hour: 9,
+                offset_minute: 12,
+            }),
+        ),
+        (b"D0001-01-01T00:00:00-2359", Ok(DateTimeOffset::MIN)),
+        (
+            b"D9999-12-31T23:59:60.999_999_999+2359",
+            Ok(DateTimeOffset::MAX),
+        ),
+        (b"D0000-01-01T00:00:00Z", Err(ErrorReason::YearOutOfRange)),
+        (b"D10000-01-01T00:00:00Z", Err(ErrorReason::MalformedDate)),
+        (b"D0001-00-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-13-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-001-01T00:00:00Z", Err(ErrorReason::MonthOutOfRange)),
+        (b"D0001-01-00T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-32T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-001T00:00:00Z", Err(ErrorReason::DayOutOfRange)),
+        (b"D0001-01-01T60:00:00Z", Err(ErrorReason::HourOutOfRange)),
+        (b"D0001-01-01T001:00:00Z", Err(ErrorReason::MalformedTime)),
+        (b"D0001-01-01T00:60:00Z", Err(ErrorReason::MinuteOutOfRange)),
+        (b"D0001-01-01T00:001:00Z", Err(ErrorReason::MalformedTime)),
+        (b"D0001-01-01T00:00:61Z", Err(ErrorReason::SecondOutOfRange)),
+        (
+            b"D0001-01-01T00:00:001Z",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00.000_000_000_001Z",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00+25",
+            Err(ErrorReason::TimezoneOffsetHourOutOfRange),
+        ),
+        (
+            b"D0001-01-01T00:00:00+0060",
+            Err(ErrorReason::TimezoneOffsetMinuteOutOfRange),
+        ),
+        (
+            b"D0001-01-01T00:00:01010",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+        (
+            b"D0001-01-01T00:00:00+01Z",
+            Err(ErrorReason::MalformedDateTimeOffset),
+        ),
+    ] {
+        let msg = format!("bytes=b\"{}\"", escape_ascii(bytes));
+        let mut decoder = Decoder::new(bytes);
+        let result = decoder.consume_date_time_offset();
+        match expected {
+            Ok(expected_value) => {
+                assert_eq!(result, Ok(expected_value), "{msg}");
+                decoder.close().expect(&msg);
+            }
+            Err(expected_reason) => {
+                let e = match result {
+                    Ok(_) => decoder.close().expect_err(&msg),
+                    Err(e) => e,
+                };
+                assert_eq!(e.reason, expected_reason, "{msg}");
+            }
+        }
+    }
 }

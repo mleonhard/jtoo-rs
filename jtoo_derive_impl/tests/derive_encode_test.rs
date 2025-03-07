@@ -386,7 +386,7 @@ fn unions() {
     let expected = quote! {
         impl jtoo::Encode for Union0 {
             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-                compile_error!("This macro does not support union types.");
+                compile_error!("`Encode` macro does not support union types.");
             }
         }
     };

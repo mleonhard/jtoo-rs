@@ -1,4 +1,4 @@
-use jtoo::{Encode, EncodeError, Encoder};
+use jtoo::{Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason};
 
 #[test]
 fn encode() {
@@ -12,6 +12,16 @@ fn encode() {
     assert_eq!(
         vec![1, 2, 3].into_boxed_slice().encode().unwrap().as_str(),
         "[1,2,3]"
+    );
+}
+
+#[test]
+fn decode() {
+    assert_eq!(Vec::<bool>::decode(b"[T]").unwrap(), vec![true]);
+    assert_eq!(Vec::<u8>::decode(b"[1]").unwrap(), vec![1]);
+    assert_eq!(
+        Vec::<Vec<u8>>::decode(b"[[1],[2,3]]").unwrap(),
+        vec![vec![1], vec![2, 3]]
     );
 }
 
@@ -75,7 +85,7 @@ fn unclosed_list() {
 }
 
 #[test]
-fn not_in_list() {
+fn close_list_not_in_list() {
     let mut encoder = Encoder::new();
     encoder.open_string().unwrap();
     assert_eq!(encoder.close_list(), Err(EncodeError::NotInList));
@@ -87,4 +97,102 @@ fn not_in_list_nested() {
     encoder.open_list().unwrap();
     encoder.open_string().unwrap();
     assert_eq!(encoder.close_list(), Err(EncodeError::NotInList));
+}
+
+#[test]
+fn list_missing_separator() {
+    let mut decoder = Decoder::new(b"[TT]");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.consume_bool().unwrap_err().reason,
+        ErrorReason::ExpectedListSeparator
+    );
+}
+
+#[test]
+fn list_list_missing_separator() {
+    let mut decoder = Decoder::new(b"[[][]]");
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.consume_list_close().unwrap_err().reason,
+        ErrorReason::ExpectedListSeparator
+    );
+}
+
+#[test]
+fn list_nested() {
+    let mut decoder = Decoder::new(b"[[],[],[[T]]]");
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_open().unwrap();
+    decoder.consume_list_open().unwrap();
+    assert_eq!(decoder.consume_bool(), Ok(true));
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.consume_list_close().unwrap();
+    decoder.close().unwrap();
+}
+
+#[test]
+fn list_not_a_list() {
+    assert_eq!(
+        Decoder::new(b"T").consume_list_open().unwrap_err().reason,
+        ErrorReason::ExpectedList
+    );
+}
+
+#[test]
+fn list_string_string() {
+    let mut decoder = Decoder::new(b"[\"a\",\"b\"]");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(decoder.consume_string(), Ok("a".to_string()));
+    assert_eq!(decoder.consume_string(), Ok("b".to_string()));
+    decoder.consume_list_close().unwrap();
+    decoder.close().unwrap();
+}
+
+#[test]
+fn list_has_next_item() {
+    let mut decoder = Decoder::new(b"[T,T]");
+    decoder.consume_list_open().unwrap();
+    assert!(decoder.has_another_list_item());
+    decoder.consume_bool().unwrap();
+    assert!(decoder.has_another_list_item());
+    decoder.consume_bool().unwrap();
+    assert!(!decoder.has_another_list_item());
+    decoder.consume_list_close().unwrap();
+    decoder.close().unwrap();
+}
+
+#[test]
+fn close_not_consumed() {
+    let mut decoder = Decoder::new(b"[]");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.close().unwrap_err().reason,
+        ErrorReason::ListCloseNotConsumed
+    );
+}
+
+#[test]
+fn consume_list_close_not_in_list() {
+    let mut decoder = Decoder::new(b"T");
+    assert_eq!(
+        decoder.consume_list_close().unwrap_err().reason,
+        ErrorReason::NotInList
+    );
+}
+
+#[test]
+fn expected_list_end() {
+    let mut decoder = Decoder::new(b"[");
+    decoder.consume_list_open().unwrap();
+    assert_eq!(
+        decoder.consume_list_close().unwrap_err().reason,
+        ErrorReason::ExpectedListEnd
+    );
 }

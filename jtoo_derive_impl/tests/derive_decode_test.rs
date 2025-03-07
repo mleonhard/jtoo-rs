@@ -8,39 +8,53 @@ fn struct_unit() {
     })
     .unwrap();
     let expected = quote! {
-        impl jtoo::Encode for Struct0 {
-            fn decode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-                encoder.open_list()?;
-                encoder.close_list()
+        impl jtoo::Decode for Struct0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()
             }
         }
     };
     assert_eq!(expected.to_string(), actual.to_string());
 }
 
-// #[test]
-// fn struct_named_field() {
-//     let actual = derive_encode(quote! {
-//         struct Struct0 {
-//             pub field0: bool,
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl jtoo::Encode for Struct0 {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 encoder.open_list()?;
-//                 encoder.append_string("field0")?;
-//                 jtoo::Encode::encode_using(&self.field0, encoder)?;
-//                 encoder.close_list()?;
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(expected.to_string(), actual.to_string());
-// }
-//
+#[test]
+fn struct_named_field() {
+    let actual = derive_decode(quote! {
+        struct Struct0 {
+            pub field0: bool,
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Decode for Struct0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let mut opt_field0: Option<bool> = None;
+                while decoder.has_another_list_item() {
+                    decoder.consume_list_open()?;
+                    match decoder.consume_string()?.as_str() {
+                        "field0" => {
+                            // TODO: Include the field name in the error message.
+                            let value = jtoo::Decode::decode_using(decoder)?;
+                            opt_field0 = Some(value);
+                        }
+                        // TODO: Add an option to allow unknown fields.
+                        _ => return Err(decoder.err(jtoo::ErrorReason::UnknownField)),
+                    }
+                    decoder.consume_list_close()?;
+                }
+                let value = Self {
+                    field0: opt_field0.ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
+                };
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
 // #[allow(clippy::too_many_lines)]
 // #[test]
 // fn struct_all_field_types() {
@@ -373,22 +387,22 @@ fn struct_unit() {
 //     };
 //     assert_eq!(actual.to_string(), expected.to_string());
 // }
-//
-// #[test]
-// fn unions() {
-//     let actual = derive_encode(quote! {
-//         #[repr(C)]
-//         union Union0 {
-//             field0: u8,
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl jtoo::Encode for Union0 {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 compile_error!("This macro does not support union types.");
-//             }
-//         }
-//     };
-//     assert_eq!(actual.to_string(), expected.to_string());
-// }
+
+#[test]
+fn unions() {
+    let actual = derive_decode(quote! {
+        #[repr(C)]
+        union Union0 {
+            field0: u8,
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Decode for Union0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                compile_error!("`Decode` macro does not support union types.");
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}

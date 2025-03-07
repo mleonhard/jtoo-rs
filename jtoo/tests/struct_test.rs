@@ -1,62 +1,119 @@
-use jtoo::Encode;
-use jtoo_derive::Encode;
+use jtoo::{Decode, Encode, ErrorReason};
+use jtoo_derive::{Decode, Encode};
 
 #[test]
 fn simple() {
-    #[derive(Encode)]
+    const STRING: &str = "[[\"field0\",T]]";
+    #[derive(Decode, Encode, Debug, Eq, PartialEq)]
     struct Struct0 {
         pub field0: bool,
     }
     let value = Struct0 { field0: true };
-    assert_eq!(value.encode(), Ok("[[\"field0\",T]]".to_string()));
+    assert_eq!(value.encode().unwrap(), STRING);
+    assert_eq!(Struct0::decode(STRING.as_bytes()).unwrap(), value);
+    assert_eq!(
+        Struct0::decode(b"[]").unwrap_err().reason,
+        ErrorReason::MissingField
+    );
 }
 
 #[test]
-fn basic_types() {
+fn struct_encode() {
     #[derive(Encode)]
+    #[allow(clippy::struct_field_names)]
     struct Struct0 {
-        pub field0: bool,
-        pub field1: i8,
-        pub field2: u8,
-        pub field3: i16,
-        pub field4: u16,
-        pub field5: i32,
-        pub field6: u32,
-        pub field7: i64,
-        pub field8: u64,
-        pub field9: &'static str,
-        pub field10: Box<str>,
-        pub field11: String,
-        pub field12: &'static [u8],
-        pub field13: Box<[u8]>,
-        pub field14: Vec<u8>,
-        pub field15: Option<bool>,
-        pub field16: &'static [bool],
-        pub field17: Box<[bool]>,
-        pub field18: Vec<bool>,
+        pub field_a: bool,
+        pub field_b: i8,
+        pub field_c: u8,
+        pub field_d: i16,
+        pub field_e: u16,
+        pub field_f: i32,
+        pub field_g: u32,
+        pub field_h: i64,
+        pub field_i: u64,
+        pub field_j: &'static str,
+        pub field_k: Box<str>,
+        pub field_l: String,
+        pub field_m: &'static [u8],
+        pub field_n: Box<[u8]>,
+        pub field_o: Vec<u8>,
+        pub field_p: Option<bool>,
+        pub field_q: &'static [bool],
+        pub field_r: Box<[bool]>,
+        pub field_s: Vec<bool>,
     }
     let value = Struct0 {
-        field0: true,
-        field1: -1,
-        field2: 1,
-        field3: -2,
-        field4: 2,
-        field5: -3,
-        field6: 3,
-        field7: -4,
-        field8: 4,
-        field9: "5",
-        field10: "5".to_string().into_boxed_str(),
-        field11: "6".to_string(),
-        field12: &[7, 8],
-        field13: vec![8, 9].into_boxed_slice(),
-        field14: vec![9, 10],
-        field15: Some(true),
-        field16: &[true, false],
-        field17: vec![false, true].into_boxed_slice(),
-        field18: vec![true, false, true],
+        field_a: true,
+        field_b: -1,
+        field_c: 1,
+        field_d: -2,
+        field_e: 2,
+        field_f: -3,
+        field_g: 3,
+        field_h: -4,
+        field_i: 4,
+        field_j: "5",
+        field_k: "6".to_string().into_boxed_str(),
+        field_l: "7".to_string(),
+        field_m: &[8, 9],
+        field_n: vec![10, 11].into_boxed_slice(),
+        field_o: vec![12, 13],
+        field_p: Some(true),
+        field_q: &[false, true],
+        field_r: vec![true, false].into_boxed_slice(),
+        field_s: vec![true, true, false],
     };
-    assert_eq!(value.encode(), Ok(r#"[["field0",T],["field1",-1],["field2",1],["field3",-2],["field4",2],["field5",-3],["field6",3],["field7",-4],["field8",4],["field9","5"],["field10","5"],["field11","6"],["field12",[7,8]],["field13",[8,9]],["field14",[9,10]],["field15",[T]],["field16",[T,F]],["field17",[F,T]],["field18",[T,F,T]]]"#.to_string()));
+    assert_eq!(value.encode(), Ok(r#"[["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_j","5"],["field_k","6"],["field_l","7"],["field_m",[8,9]],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_q",[F,T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#.to_string()));
+}
+
+#[test]
+fn struct_decode() {
+    const STRING: &str = r#"[["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_k","6"],["field_l","7"],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#;
+    #[derive(Decode, Debug, Eq, PartialEq)]
+    #[allow(clippy::struct_field_names)]
+    struct Struct0 {
+        pub field_a: bool,
+        pub field_b: i8,
+        pub field_c: u8,
+        pub field_d: i16,
+        pub field_e: u16,
+        pub field_f: i32,
+        pub field_g: u32,
+        pub field_h: i64,
+        pub field_i: u64,
+        // pub field_j: &'static str,
+        pub field_k: Box<str>,
+        pub field_l: String,
+        // pub field_m: &'static [u8],
+        pub field_n: Box<[u8]>,
+        pub field_o: Vec<u8>,
+        pub field_p: Option<bool>,
+        // pub field_q: &'static [bool],
+        pub field_r: Box<[bool]>,
+        pub field_s: Vec<bool>,
+    }
+    let value = Struct0 {
+        field_a: true,
+        field_b: -1,
+        field_c: 1,
+        field_d: -2,
+        field_e: 2,
+        field_f: -3,
+        field_g: 3,
+        field_h: -4,
+        field_i: 4,
+        // field_j: "5",
+        field_k: "6".to_string().into_boxed_str(),
+        field_l: "7".to_string(),
+        // field_m: &[8, 9],
+        field_n: vec![10, 11].into_boxed_slice(),
+        field_o: vec![12, 13],
+        field_p: Some(true),
+        // field_q: &[false, true],
+        field_r: vec![true, false].into_boxed_slice(),
+        field_s: vec![true, true, false],
+    };
+    assert_eq!(Struct0::decode(STRING.as_bytes()).unwrap(), value);
 }
 
 #[test]

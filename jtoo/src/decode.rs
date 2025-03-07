@@ -40,6 +40,7 @@ pub enum ErrorReason {
     MalformedTime,
     MalformedTimestamp,
     MinuteOutOfRange,
+    MissingField,
     MonthOutOfRange,
     NegativeZero,
     NotInList,
@@ -49,6 +50,7 @@ pub enum ErrorReason {
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
+    UnknownField,
     UppercaseHexNotAllowedInByteString,
     YearOutOfRange,
     ZeroTimeZoneMinutesShouldBeOmitted,
@@ -171,7 +173,7 @@ impl<T: Decode> Decode for Vec<T> {
     fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
         decoder.consume_list_open()?;
         let mut result = Vec::new();
-        if decoder.has_another_list_item() {
+        while decoder.has_another_list_item() {
             let value = T::decode_using(decoder)?;
             result.push(value);
         }
