@@ -118,10 +118,20 @@ fn struct_decode() {
 
 #[test]
 fn tuple() {
-    #[derive(Encode)]
+    #[derive(Decode, Encode, Debug, Eq, PartialEq)]
     struct Struct0(bool, String, u8);
+    const STRING: &str = r#"[T,"value0",2]"#;
     let value = Struct0(true, String::from("value0"), 2);
-    assert_eq!(value.encode(), Ok(r#"[T,"value0",2]"#.to_string()));
+    assert_eq!(value.encode().unwrap(), STRING);
+    assert_eq!(Struct0::decode(STRING.as_bytes()).unwrap(), value);
+    assert_eq!(
+        Struct0::decode(b"[T,2]").unwrap_err().reason,
+        ErrorReason::ExpectedString
+    );
+    assert_eq!(
+        Struct0::decode(b"[T]").unwrap_err().reason,
+        ErrorReason::ExpectedString
+    );
 }
 
 #[test]

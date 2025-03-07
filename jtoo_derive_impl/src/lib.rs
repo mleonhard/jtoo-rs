@@ -216,16 +216,18 @@ fn decode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
             }
         }
         Fields::Unnamed(ref fields) => {
-            let per_field_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
-                let index = Literal::usize_unsuffixed(n);
+            let field_assignments = fields.unnamed.iter().map(|field| {
                 quote_spanned! {field.span()=>
-                    jtoo::Encode::encode_using(&self . #index, encoder)?;
+                    Decode::decode_using(decoder)?,
                 }
             });
             quote! {
                 decoder.consume_list_open()?;
-                #(#per_field_calls)*
-                decoder.consume_list_close()
+                let value = Self(
+                    #(#field_assignments)*
+                );
+                decoder.consume_list_close()?;
+                Ok(value)
             }
         }
         Fields::Unit => {
