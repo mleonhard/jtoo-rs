@@ -271,15 +271,12 @@ fn enums() {
                     Enum0::Named0 { named_field0 } => {
                         encoder.append_string("Named0")?;
                         encoder.open_list()?;
-                        encoder.open_list()?;
                         encoder.append_string("named_field0")?;
                         jtoo::Encode::encode_using(named_field0, encoder)?;
-                        encoder.close_list()?;
                         encoder.close_list()?;
                     }
                     Enum0::Named1 { named_field0, named_field1 } => {
                         encoder.append_string("Named1")?;
-                        encoder.open_list()?;
                         encoder.open_list()?;
                         encoder.append_string("named_field0")?;
                         jtoo::Encode::encode_using(named_field0, encoder)?;
@@ -287,7 +284,6 @@ fn enums() {
                         encoder.open_list()?;
                         encoder.append_string("named_field1")?;
                         jtoo::Encode::encode_using(named_field1, encoder)?;
-                        encoder.close_list()?;
                         encoder.close_list()?;
                     }
                 }

@@ -50,6 +50,7 @@ pub enum ErrorReason {
     TimezoneOffsetHourOutOfRange,
     TimezoneOffsetMinuteOutOfRange,
     UnclosedString,
+    UnknownEnumVariant,
     UnknownField,
     UppercaseHexNotAllowedInByteString,
     YearOutOfRange,

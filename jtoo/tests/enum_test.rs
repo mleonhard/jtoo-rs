@@ -1,5 +1,5 @@
-use jtoo::Encode;
-use jtoo_derive::Encode;
+use jtoo::{Decode, Encode, ErrorReason};
+use jtoo_derive::{Decode, Encode};
 
 #[test]
 fn encode() {
@@ -22,7 +22,7 @@ fn encode() {
     );
     assert_eq!(
         Enum0::Named0 { field0: true }.encode().unwrap().as_str(),
-        r#"["Named0",[["field0",T]]]"#
+        r#"["Named0",["field0",T]]"#
     );
     assert_eq!(
         Enum0::Named1 {
@@ -32,7 +32,63 @@ fn encode() {
         .encode()
         .unwrap()
         .as_str(),
-        r#"["Named1",[["field0",F],["field1",2]]]"#
+        r#"["Named1",["field0",F],["field1",2]]"#
+    );
+}
+
+#[test]
+fn decode() {
+    #[derive(Decode, Debug, Eq, PartialEq)]
+    enum Enum0 {
+        Unit0,
+        Tuple0(bool),
+        Tuple1(bool, u8),
+        Named0 { field0: bool },
+        Named1 { field0: bool, field1: u8 },
+    }
+    assert_eq!(Enum0::decode(br#"["Unit0"]"#).unwrap(), Enum0::Unit0);
+    assert_eq!(
+        Enum0::decode(br#"["Tuple0",F]"#).unwrap(),
+        Enum0::Tuple0(false)
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Tuple0"]"#).unwrap_err().reason,
+        ErrorReason::ExpectedBool
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Tuple0",T,T]"#).unwrap_err().reason,
+        ErrorReason::ExpectedListEnd
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Tuple1",T,7]"#).unwrap(),
+        Enum0::Tuple1(true, 7)
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Tuple1",T,7]"#).unwrap(),
+        Enum0::Tuple1(true, 7)
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Named0",["field0",F]]"#).unwrap(),
+        Enum0::Named0 { field0: false }
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Named1",["field1",7],["field0",F]]"#).unwrap(),
+        Enum0::Named1 {
+            field0: false,
+            field1: 7
+        }
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Named0",T]"#).unwrap_err().reason,
+        ErrorReason::ExpectedList
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Named0"]"#).unwrap_err().reason,
+        ErrorReason::MissingField
+    );
+    assert_eq!(
+        Enum0::decode(br#"["Unknown0"]"#).unwrap_err().reason,
+        ErrorReason::UnknownEnumVariant
     );
 }
 

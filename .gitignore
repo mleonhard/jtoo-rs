@@ -4,3 +4,6 @@ target/
 Cargo.lock
 **/*.rs.bk
 *.pdb
+.DS_Store
+Readme.md.pruned
+Readme.md.tmp

@@ -285,140 +285,159 @@ fn struct_two_parameters() {
     assert_eq!(expected.to_string(), actual.to_string());
 }
 
-// #[test]
-// fn enums() {
-//     let actual = derive_encode(quote! {
-//         enum Enum0 {
-//             Unit0,
-//             Tuple0(bool),
-//             Tuple1(bool, u8),
-//             Named0 { named_field0: bool },
-//             Named1 { named_field0: bool, named_field1: u8 },
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl jtoo::Encode for Enum0 {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 match self {
-//                     Enum0::Unit0 => {
-//                         encoder.append_string("Unit0")?;
-//                     }
-//                     Enum0::Tuple0(field0) => {
-//                         encoder.append_string("Tuple0")?;
-//                         jtoo::Encode::encode_using(field0, encoder)?;
-//                     }
-//                     Enum0::Tuple1(field0, field1) => {
-//                         encoder.append_string("Tuple1")?;
-//                         jtoo::Encode::encode_using(field0, encoder)?;
-//                         jtoo::Encode::encode_using(field1, encoder)?;
-//                     }
-//                     Enum0::Named0 { named_field0 } => {
-//                         encoder.append_string("Named0")?;
-//                         encoder.open_list()?;
-//                         encoder.open_list()?;
-//                         encoder.append_string("named_field0")?;
-//                         jtoo::Encode::encode_using(named_field0, encoder)?;
-//                         encoder.close_list()?;
-//                         encoder.close_list()?;
-//                     }
-//                     Enum0::Named1 { named_field0, named_field1 } => {
-//                         encoder.append_string("Named1")?;
-//                         encoder.open_list()?;
-//                         encoder.open_list()?;
-//                         encoder.append_string("named_field0")?;
-//                         jtoo::Encode::encode_using(named_field0, encoder)?;
-//                         encoder.close_list()?;
-//                         encoder.open_list()?;
-//                         encoder.append_string("named_field1")?;
-//                         jtoo::Encode::encode_using(named_field1, encoder)?;
-//                         encoder.close_list()?;
-//                         encoder.close_list()?;
-//                     }
-//                 }
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(actual.to_string(), expected.to_string());
-// }
-//
-// #[test]
-// fn enum_parameter() {
-//     let actual = derive_encode(quote! {
-//         enum Enum0<T0> {
-//             Tuple0(T0),
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: jtoo::Encode> jtoo::Encode for Enum0<T0> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 match self {
-//                     Enum0::Tuple0(field0) => {
-//                         encoder.append_string("Tuple0")?;
-//                         jtoo::Encode::encode_using(field0, encoder)?;
-//                     }
-//                 }
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(actual.to_string(), expected.to_string());
-// }
-//
-// #[test]
-// fn enum_constrained_parameter() {
-//     let actual = derive_encode(quote! {
-//         enum Enum0<T0: Sized + Clone + Send> {
-//             Tuple0(T0),
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: Sized + Clone + Send + jtoo::Encode> jtoo::Encode for Enum0<T0> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 match self {
-//                     Enum0::Tuple0(field0) => {
-//                         encoder.append_string("Tuple0")?;
-//                         jtoo::Encode::encode_using(field0, encoder)?;
-//                     }
-//                 }
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(actual.to_string(), expected.to_string());
-// }
-//
-// #[test]
-// fn enum_two_parameters() {
-//     let actual = derive_encode(quote! {
-//         enum Enum0<T0: Sized + Clone + Send, T1> {
-//             Tuple0(T0, T1),
-//         }
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: Sized + Clone + Send + jtoo::Encode, T1: jtoo::Encode> jtoo::Encode for Enum0<T0, T1> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 match self {
-//                     Enum0::Tuple0(field0, field1) => {
-//                         encoder.append_string("Tuple0")?;
-//                         jtoo::Encode::encode_using(field0, encoder)?;
-//                         jtoo::Encode::encode_using(field1, encoder)?;
-//                     }
-//                 }
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(actual.to_string(), expected.to_string());
-// }
+#[test]
+fn enums() {
+    let actual = derive_decode(quote! {
+        enum Enum0 {
+            Unit0,
+            Tuple0(bool),
+            Tuple1(bool, u8),
+            Named0 { field0: bool },
+            Named1 { field0: bool, field1: u8 },
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Decode for Enum0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = match decoder.consume_string()?.as_str() {
+                    "Unit0" => Enum0::Unit0,
+                    "Tuple0" => Enum0::Tuple0(
+                            Decode::decode_using(decoder)?,
+                    ),
+                    "Tuple1" => Enum0::Tuple1(
+                            Decode::decode_using(decoder)?,
+                            Decode::decode_using(decoder)?,
+                    ),
+                    "Named0" => {
+                        let mut opt_field0: Option<bool> = None;
+                        while decoder.has_another_list_item() {
+                            decoder.consume_list_open()?;
+                            match decoder.consume_string()?.as_str() {
+                                "field0" => {
+                                    let value = jtoo::Decode::decode_using(decoder)?;
+                                    opt_field0 = Some(value);
+                                }
+                                _ => return Err(decoder.err(jtoo::ErrorReason::UnknownField)),
+                            }
+                            decoder.consume_list_close()?;
+                        }
+                        Enum0::Named0 {
+                            field0: opt_field0.ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
+                        }
+                    }
+                    "Named1" => {
+                        let mut opt_field0: Option<bool> = None;
+                        let mut opt_field1: Option<u8> = None;
+                        while decoder.has_another_list_item() {
+                            decoder.consume_list_open()?;
+                            match decoder.consume_string()?.as_str() {
+                                "field0" => {
+                                    let value = jtoo::Decode::decode_using(decoder)?;
+                                    opt_field0 = Some(value);
+                                }
+                                "field1" => {
+                                    let value = jtoo::Decode::decode_using(decoder)?;
+                                    opt_field1 = Some(value);
+                                }
+                                _ => return Err(decoder.err(jtoo::ErrorReason::UnknownField)),
+                            }
+                            decoder.consume_list_close()?;
+                        }
+                        Enum0::Named1 {
+                            field0: opt_field0.ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
+                            field1: opt_field1.ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
+                        }
+                    }
+                    _ => return Err(decoder.err(jtoo::ErrorReason::UnknownEnumVariant)),
+                };
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_parameter() {
+    let actual = derive_decode(quote! {
+        enum Enum0<T0> {
+            Tuple0(T0),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: jtoo::Decode> jtoo::Decode for Enum0<T0> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = match decoder.consume_string()?.as_str() {
+                    "Tuple0" => Enum0::Tuple0(
+                            Decode::decode_using(decoder)?,
+                    ),
+                    _ => return Err(decoder.err(jtoo::ErrorReason::UnknownEnumVariant)),
+                };
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_constrained_parameter() {
+    let actual = derive_decode(quote! {
+        enum Enum0<T0: Sized + Clone + Send> {
+            Tuple0(T0),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Decode> jtoo::Decode for Enum0<T0> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = match decoder.consume_string()?.as_str() {
+                    "Tuple0" => Enum0::Tuple0(
+                            Decode::decode_using(decoder)?,
+                    ),
+                    _ => return Err(decoder.err(jtoo::ErrorReason::UnknownEnumVariant)),
+                };
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
+
+#[test]
+fn enum_two_parameters() {
+    let actual = derive_decode(quote! {
+        enum Enum0<T0: Sized + Clone + Send, T1> {
+            Tuple0(T0, T1),
+        }
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Decode, T1: jtoo::Decode> jtoo::Decode for Enum0<T0, T1> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = match decoder.consume_string()?.as_str() {
+                    "Tuple0" => Enum0::Tuple0(
+                            Decode::decode_using(decoder)?,
+                            Decode::decode_using(decoder)?,
+                    ),
+                    _ => return Err(decoder.err(jtoo::ErrorReason::UnknownEnumVariant)),
+                };
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(actual.to_string(), expected.to_string());
+}
 
 #[test]
 fn unions() {

@@ -96,9 +96,7 @@ fn encode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
                 quote_spanned! {variant.span()=>
                     #enum_ident :: #variant_ident { #(#field_idents ),* } => {
                         encoder.append_string(#variant_literal)?;
-                        encoder.open_list()?;
                         #(#encoder_calls)*
-                        encoder.close_list()?;
                     }
                 }
             }
@@ -161,55 +159,66 @@ pub fn derive_encode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     })
 }
 
+fn read_named_fields(fields: &syn::FieldsNamed) -> TokenStream {
+    let declare_opt_field_vars = fields.named.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let opt_field_name_string = format!("opt_{field_name}");
+        let opt_field_name = Ident::new(&opt_field_name_string, field.span());
+        let field_type = field.ty.clone();
+        quote_spanned! {field.span()=>
+            let mut #opt_field_name: Option<#field_type> = None;
+        }
+    });
+    let match_arms = fields.named.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_name_string = Literal::string(&field_name.to_string());
+        let opt_field_name_string = format!("opt_{field_name}");
+        let opt_field_name = Ident::new(&opt_field_name_string, field.span());
+        quote_spanned! {field.span()=>
+            #field_name_string => {
+                // TODO: Include the field name in the error message.
+                let value = jtoo::Decode::decode_using(decoder)?;
+                #opt_field_name = Some(value);
+            }
+        }
+    });
+    quote! {
+        #(#declare_opt_field_vars)*
+        while decoder.has_another_list_item() {
+            decoder.consume_list_open()?;
+            match decoder.consume_string()?.as_str() {
+                #(#match_arms)*
+                // TODO: Add an option to allow unknown fields.
+                _ => return Err(decoder.err(jtoo::ErrorReason::UnknownField)),
+            }
+            decoder.consume_list_close()?;
+        }
+    }
+}
+
+fn assign_fields(fields: &syn::FieldsNamed) -> TokenStream {
+    fields.named.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        //let field_name_string = Literal::string(&field_name.to_string());
+        let opt_field_name_string = format!("opt_{field_name}");
+        let opt_field_name = Ident::new(&opt_field_name_string, field.span());
+        quote_spanned! {field.span()=>
+            // TODO: Include the field name in the error message.
+            #field_name : #opt_field_name .ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
+        }
+    }).collect()
+}
+
 fn decode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
     match &data.fields {
         Fields::Named(ref fields) => {
-            let declare_opt_field_vars = fields.named.iter().map(|field| {
-                let field_name = field.ident.as_ref().unwrap();
-                let opt_field_name_string = format!("opt_{field_name}");
-                let opt_field_name = Ident::new(&opt_field_name_string, field.span());
-                let field_type = field.ty.clone();
-                quote_spanned! {field.span()=>
-                    let mut #opt_field_name: Option<#field_type> = None;
-                }
-            });
-            let match_arms = fields.named.iter().map(|field| {
-                let field_name = field.ident.as_ref().unwrap();
-                let field_name_string = Literal::string(&field_name.to_string());
-                let opt_field_name_string = format!("opt_{field_name}");
-                let opt_field_name = Ident::new(&opt_field_name_string, field.span());
-                quote_spanned! {field.span()=>
-                    #field_name_string => {
-                        // TODO: Include the field name in the error message.
-                        let value = jtoo::Decode::decode_using(decoder)?;
-                        #opt_field_name = Some(value);
-                    }
-                }
-            });
-            let field_assignments = fields.named.iter().map(|field| {
-                let field_name = field.ident.as_ref().unwrap();
-                //let field_name_string = Literal::string(&field_name.to_string());
-                let opt_field_name_string = format!("opt_{field_name}");
-                let opt_field_name = Ident::new(&opt_field_name_string, field.span());
-                quote_spanned! {field.span()=>
-                        // TODO: Include the field name in the error message.
-                    #field_name : #opt_field_name .ok_or_else(|| decoder.err(jtoo::ErrorReason::MissingField))?,
-                }
-            });
+            let read_fields_statements = read_named_fields(fields);
+            let assign_fields_statements = assign_fields(fields);
             quote! {
                 decoder.consume_list_open()?;
-                #(#declare_opt_field_vars)*
-                while decoder.has_another_list_item() {
-                    decoder.consume_list_open()?;
-                    match decoder.consume_string()?.as_str() {
-                        #(#match_arms)*
-                        // TODO: Add an option to allow unknown fields.
-                        _ => return Err(decoder.err(jtoo::ErrorReason::UnknownField)),
-                    }
-                    decoder.consume_list_close()?;
-                }
+                #read_fields_statements
                 let value = Self {
-                    #(#field_assignments)*
+                    #assign_fields_statements
                 };
                 decoder.consume_list_close()?;
                 Ok(value)
@@ -244,65 +253,46 @@ fn decode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
         let variant_ident = &variant.ident;
         let variant_literal = Literal::string(&variant_ident.to_string());
         let unit_arm = quote_spanned! {variant.span()=>
-            #enum_ident :: #variant_ident => {
-                encoder.append_string(#variant_literal)?;
-            }
+            #variant_literal => #enum_ident :: #variant_ident ,
         };
         match &variant.fields {
             Fields::Unit => unit_arm,
             Fields::Named(fields) if fields.named.is_empty() => unit_arm,
             Fields::Unnamed(fields) if fields.unnamed.is_empty() => unit_arm,
             Fields::Named(fields) => {
-                let field_idents = fields
-                    .named
-                    .iter()
-                    .map(|field| field.ident.as_ref().unwrap());
-                let encoder_calls = fields.named.iter().map(|field| {
-                    let field_ident = field.ident.as_ref().unwrap();
-                    let field_literal = Literal::string(&field_ident.to_string());
-                    quote_spanned! {field.span()=>
-                        encoder.open_list()?;
-                        encoder.append_string(#field_literal)?;
-                        jtoo::Encode::encode_using(#field_ident, encoder)?;
-                        encoder.close_list()?;
-                    }
-                });
+                let read_fields_statements = read_named_fields(fields);
+                let assign_fields_statements = assign_fields(fields);
                 quote_spanned! {variant.span()=>
-                    #enum_ident :: #variant_ident { #(#field_idents ),* } => {
-                        encoder.append_string(#variant_literal)?;
-                        encoder.open_list()?;
-                        #(#encoder_calls)*
-                        encoder.close_list()?;
+                    #variant_literal => {
+                        #read_fields_statements
+                        #enum_ident :: #variant_ident {
+                            #assign_fields_statements
+                        }
                     }
                 }
             }
             Fields::Unnamed(fields) => {
-                let field_idents = fields
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(n, field)| format_ident!("field{}", n, span = field.ident.span()));
-                let encoder_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
-                    let field_ident = format_ident!("field{}", n, span = field.ident.span());
+                let field_assignments = fields.unnamed.iter().map(|field| {
                     quote_spanned! {field.span()=>
-                        jtoo::Encode::encode_using(#field_ident, encoder)?;
+                        Decode::decode_using(decoder)?,
                     }
                 });
-                quote_spanned! {variant.span()=>
-                    #enum_ident :: #variant_ident ( #(#field_idents ),* ) => {
-                        encoder.append_string(#variant_literal)?;
-                        #(#encoder_calls)*
-                    }
+                quote! {
+                    #variant_literal => #enum_ident :: #variant_ident (
+                        #(#field_assignments)*
+                    ),
                 }
             }
         }
     });
     quote! {
-        encoder.open_list()?;
-        match self {
+        decoder.consume_list_open()?;
+        let value = match decoder.consume_string()?.as_str() {
             #(#arms)*
-        }
-        encoder.close_list()
+            _ => return Err(decoder.err(jtoo::ErrorReason::UnknownEnumVariant)),
+        };
+        decoder.consume_list_close()?;
+        Ok(value)
     }
 }
 
