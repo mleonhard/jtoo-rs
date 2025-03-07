@@ -221,61 +221,70 @@ fn struct_tuple() {
     assert_eq!(expected.to_string(), actual.to_string());
 }
 
-// #[test]
-// fn struct_parameter() {
-//     let actual = derive_encode(quote! {
-//         struct Struct0<T0>(T0);
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: jtoo::Encode> jtoo::Encode for Struct0<T0> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 jtoo::Encode::encode_using(&self.0, encoder)?;
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(expected.to_string(), actual.to_string());
-// }
-//
-// #[test]
-// fn struct_constrained_parameter() {
-//     let actual = derive_encode(quote! {
-//         struct Struct0<T0: Clone>(T0);
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: Clone + jtoo::Encode> jtoo::Encode for Struct0<T0> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 jtoo::Encode::encode_using(&self.0, encoder)?;
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(expected.to_string(), actual.to_string());
-// }
-//
-// #[test]
-// fn struct_two_parameters() {
-//     let actual = derive_encode(quote! {
-//         struct Struct0<T0: Sized + Clone + Send, T1>(T0, T1);
-//     })
-//     .unwrap();
-//     let expected = quote! {
-//         impl <T0: Sized + Clone + Send + jtoo::Encode, T1: jtoo::Encode> jtoo::Encode for Struct0<T0, T1> {
-//             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
-//                 encoder.open_list()?;
-//                 jtoo::Encode::encode_using(&self.0, encoder)?;
-//                 jtoo::Encode::encode_using(&self.1, encoder)?;
-//                 encoder.close_list()
-//             }
-//         }
-//     };
-//     assert_eq!(expected.to_string(), actual.to_string());
-// }
-//
+#[test]
+fn struct_parameter() {
+    let actual = derive_decode(quote! {
+        struct Struct0<T0>(T0);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: jtoo::Decode> jtoo::Decode for Struct0<T0> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = Self(
+                    Decode::decode_using(decoder)?,
+                );
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn struct_constrained_parameter() {
+    let actual = derive_decode(quote! {
+        struct Struct0<T0: Clone>(T0);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Clone + jtoo::Decode> jtoo::Decode for Struct0<T0> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = Self(
+                    Decode::decode_using(decoder)?,
+                );
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn struct_two_parameters() {
+    let actual = derive_decode(quote! {
+        struct Struct0<T0: Sized + Clone + Send, T1>(T0, T1);
+    })
+    .unwrap();
+    let expected = quote! {
+        impl <T0: Sized + Clone + Send + jtoo::Decode, T1: jtoo::Decode> jtoo::Decode for Struct0<T0, T1> {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                let value = Self(
+                    Decode::decode_using(decoder)?,
+                    Decode::decode_using(decoder)?,
+                );
+                decoder.consume_list_close()?;
+                Ok(value)
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
 // #[test]
 // fn enums() {
 //     let actual = derive_encode(quote! {

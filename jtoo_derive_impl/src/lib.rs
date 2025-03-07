@@ -314,7 +314,7 @@ pub fn derive_decode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     let mut generics = input.generics;
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(parse_quote!(jtoo::Encode));
+            type_param.bounds.push(parse_quote!(jtoo::Decode));
         }
     }
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
