@@ -154,8 +154,7 @@ impl Encode for rust_decimal::Decimal {
         use rust_decimal::prelude::ToPrimitive;
         let value = self.normalize();
         let mantissa = value.mantissa().to_i64().ok_or(EncodeError::OutOfRange)?;
-        let exponent =
-            i8::try_from(-i64::from(value.fract().scale())).map_err(|_| EncodeError::OutOfRange)?;
+        let exponent = u8::try_from(value.scale()).map_err(|_| EncodeError::OutOfRange)?;
         let jtoo_decimal = Decimal::new(mantissa, exponent);
         encoder.append_decimal(jtoo_decimal)
     }

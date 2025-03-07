@@ -187,6 +187,19 @@ impl Decode for SystemTime {
             .ok_or_else(|| decoder.err(ErrorReason::TimestampOutOfRange))
     }
 }
+#[cfg(feature = "rust_decimal")]
+impl Decode for rust_decimal::Decimal {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        let jtoo_decimal = decoder.consume_decimal()?;
+        if 28 < jtoo_decimal.neg_exponent {
+            return Err(decoder.err(ErrorReason::DecimalExponentOutOfRange));
+        }
+        Ok(rust_decimal::Decimal::new(
+            jtoo_decimal.mantissa,
+            u32::from(jtoo_decimal.neg_exponent),
+        ))
+    }
+}
 impl Decode for DateTimeOffset {
     fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
         decoder.consume_date_time_offset()

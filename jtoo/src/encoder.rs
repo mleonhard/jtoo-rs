@@ -208,13 +208,13 @@ impl Encoder {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn push_decimal(&mut self, value: i64, base10_exponent: i8) -> Result<(), EncodeError> {
+    fn push_decimal(&mut self, value: i64, neg_base10_exponent: u8) -> Result<(), EncodeError> {
         if value == 0 {
-            if -1 < base10_exponent {
+            if neg_base10_exponent == 0 {
                 self.string.push_str("0.0");
             } else {
                 self.string.push_str("0.");
-                for n in 0..base10_exponent.unsigned_abs() {
+                for n in 0..neg_base10_exponent {
                     if 0 < n && (n % 3) == 0 {
                         self.string.push('_');
                     }
@@ -235,12 +235,8 @@ impl Encoder {
             digits_len += 1;
             value /= 10;
         }
-        let rhs_len = base10_exponent.min(0).unsigned_abs() as usize;
-        let lhs_len = if base10_exponent < 0 {
-            digits_len.saturating_sub(base10_exponent.unsigned_abs() as usize)
-        } else {
-            digits_len + (base10_exponent.unsigned_abs() as usize)
-        };
+        let rhs_len = usize::from(neg_base10_exponent);
+        let lhs_len = digits_len.saturating_sub(usize::from(neg_base10_exponent));
         if lhs_len == 0 {
             self.string.push('0');
         }
@@ -262,7 +258,7 @@ impl Encoder {
             }
             self.string.push(Self::DIGITS[digit as usize]);
         }
-        if 0 <= base10_exponent {
+        if neg_base10_exponent == 0 {
             self.string.push_str(".0");
         }
         Ok(())
@@ -272,7 +268,7 @@ impl Encoder {
     #[allow(clippy::missing_errors_doc)]
     pub fn append_decimal(&mut self, value: Decimal) -> Result<(), EncodeError> {
         self.prepare_for_new_value()?;
-        self.push_decimal(value.mantissa, value.exponent)
+        self.push_decimal(value.mantissa, value.neg_exponent)
     }
 
     #[allow(clippy::unnecessary_wraps)]
@@ -405,7 +401,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(ms).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.push_decimal(value, -3)
+        self.push_decimal(value, 3)
     }
 
     /// `S1_234.567_800`
@@ -414,7 +410,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(us).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.push_decimal(value, -6)
+        self.push_decimal(value, 6)
     }
 
     /// `S1_234.567_890_100`
@@ -423,7 +419,7 @@ impl Encoder {
         self.prepare_for_new_value()?;
         self.string.push('S');
         let value = i64::try_from(ns).map_err(|_| EncodeError::InvalidTimestamp)?;
-        self.push_decimal(value, -9)
+        self.push_decimal(value, 9)
     }
 
     #[allow(clippy::missing_errors_doc)]

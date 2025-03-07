@@ -419,7 +419,7 @@ impl<'a> Decoder<'a> {
         let mut seen_period = false;
         let mut mantissa = 0u64;
         let mut last_digit = 0u64;
-        let mut exponent = 0i8;
+        let mut neg_exponent = 0u8;
         while let Some(b) = self.bytes.first().copied() {
             match b {
                 b'0'..=b'9' => {
@@ -432,8 +432,8 @@ impl<'a> Decoder<'a> {
                         .checked_add(last_digit)
                         .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
                     if seen_period {
-                        exponent = exponent
-                            .checked_add(-1)
+                        neg_exponent = neg_exponent
+                            .checked_add(1)
                             .ok_or_else(|| self.err(ErrorReason::DecimalExponentOutOfRange))?;
                     }
                     last_digit = u64::from(b - b'0');
@@ -453,8 +453,8 @@ impl<'a> Decoder<'a> {
             }
         }
         format_checker.finish().map_err(|reason| self.err(reason))?;
-        if last_digit == 0 && exponent == -1 {
-            exponent = 0;
+        if last_digit == 0 && neg_exponent == 1 {
+            neg_exponent = 0;
         } else {
             mantissa = mantissa
                 .checked_mul(10)
@@ -468,7 +468,7 @@ impl<'a> Decoder<'a> {
             match mantissa {
                 0 => return Err(self.err(ErrorReason::NegativeZero)),
                 9_223_372_036_854_775_808 => {
-                    return Ok(Decimal::new(-9_223_372_036_854_775_808, exponent))
+                    return Ok(Decimal::new(-9_223_372_036_854_775_808, neg_exponent))
                 }
                 _ => {}
             }
@@ -478,7 +478,7 @@ impl<'a> Decoder<'a> {
         let mantissa = mantissa
             .checked_mul(if is_neg { -1 } else { 1 })
             .ok_or_else(|| self.err(ErrorReason::DecimalMantissaOutOfRange))?;
-        Ok(Decimal::new(mantissa, exponent))
+        Ok(Decimal::new(mantissa, neg_exponent))
     }
 
     /// # Errors
