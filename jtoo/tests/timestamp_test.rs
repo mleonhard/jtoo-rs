@@ -1,47 +1,9 @@
-use jtoo::{escape_ascii, Decoder, Encode, EncodeError, Encoder, ErrorReason};
+use jtoo::{escape_ascii, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason};
+use std::ops::Add;
 use std::time::{Duration, SystemTime};
 
 #[test]
-fn encode() {
-    for (duration, expected) in [
-        (Duration::ZERO, "S0"),
-        (Duration::from_secs(987_654_321), "S987_654_321"),
-        (Duration::from_millis(987_654_321_100), "S987_654_321.100"),
-        (Duration::from_millis(987_654_321_120), "S987_654_321.120"),
-        (Duration::from_millis(987_654_321_123), "S987_654_321.123"),
-        (
-            Duration::from_micros(987_654_321_123_400),
-            "S987_654_321.123_400",
-        ),
-        (
-            Duration::from_micros(987_654_321_123_450),
-            "S987_654_321.123_450",
-        ),
-        (
-            Duration::from_micros(987_654_321_123_456),
-            "S987_654_321.123_456",
-        ),
-        (
-            Duration::from_nanos(987_654_321_123_456_700),
-            "S987_654_321.123_456_700",
-        ),
-        (
-            Duration::from_nanos(987_654_321_123_456_780),
-            "S987_654_321.123_456_780",
-        ),
-        (
-            Duration::from_nanos(987_654_321_123_456_789),
-            "S987_654_321.123_456_789",
-        ),
-    ] {
-        let msg = format!("{duration:?}");
-        let timestamp = SystemTime::UNIX_EPOCH.checked_add(duration).expect(&msg);
-        assert_eq!(timestamp.encode().expect(&msg).as_str(), expected);
-    }
-}
-
-#[test]
-fn seconds() {
+fn append_seconds() {
     for (value, expected) in [
         (0, Ok("S0")),
         (1, Ok("S1")),
@@ -70,7 +32,7 @@ fn seconds() {
 }
 
 #[test]
-fn milliseconds() {
+fn append_milliseconds() {
     for (value, expected) in [
         (0, Ok("S0.000")),
         (1, Ok("S0.001")),
@@ -99,7 +61,7 @@ fn milliseconds() {
 }
 
 #[test]
-fn microseconds() {
+fn append_microseconds() {
     for (value, expected) in [
         (0, Ok("S0.000_000")),
         (1, Ok("S0.000_001")),
@@ -128,7 +90,7 @@ fn microseconds() {
 }
 
 #[test]
-fn nanoseconds() {
+fn append_nanoseconds() {
     for (value, expected) in [
         (0, Ok("S0.000_000_000")),
         (1, Ok("S0.000_000_001")),
@@ -157,17 +119,7 @@ fn nanoseconds() {
 }
 
 #[test]
-fn unclosed_string() {
-    let mut encoder = Encoder::new();
-    encoder.open_string().unwrap();
-    assert_eq!(
-        encoder.append_timestamp_seconds(0),
-        Err(EncodeError::UnclosedString)
-    );
-}
-
-#[test]
-fn in_list() {
+fn append_in_list() {
     let mut encoder = Encoder::new();
     encoder.open_list().unwrap();
     encoder.append_timestamp_seconds(0).unwrap();
@@ -177,7 +129,17 @@ fn in_list() {
 }
 
 #[test]
-fn consume_timestamp_nanoseconds() {
+fn append_in_string() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(
+        encoder.append_timestamp_seconds(0),
+        Err(EncodeError::UnclosedString)
+    );
+}
+
+#[test]
+fn consume_nanoseconds() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedTimestamp)),
         (b"\"a\"", Err(ErrorReason::ExpectedTimestamp)),
@@ -230,4 +192,73 @@ fn consume_timestamp_nanoseconds() {
             Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason, "{msg}"),
         }
     }
+}
+
+#[test]
+fn decode() {
+    assert_eq!(SystemTime::decode(b"S0").unwrap(), SystemTime::UNIX_EPOCH);
+    assert_eq!(
+        SystemTime::decode(b"S18_446_744_073").unwrap(),
+        SystemTime::UNIX_EPOCH.add(Duration::from_secs(18_446_744_073))
+    );
+    assert_eq!(
+        SystemTime::decode(b"S18_446_744_073.709").unwrap(),
+        SystemTime::UNIX_EPOCH.add(Duration::from_millis(18_446_744_073_709))
+    );
+    assert_eq!(
+        SystemTime::decode(b"S18_446_744_073.709_551").unwrap(),
+        SystemTime::UNIX_EPOCH.add(Duration::from_micros(18_446_744_073_709_551))
+    );
+    assert_eq!(
+        SystemTime::decode(b"S18_446_744_073.709_551_615").unwrap(),
+        SystemTime::UNIX_EPOCH.add(Duration::from_nanos(18_446_744_073_709_551_615))
+    );
+    assert_eq!(
+        SystemTime::decode(b"S18_446_744_073.709_551_616")
+            .unwrap_err()
+            .reason,
+        ErrorReason::TimestampOutOfRange
+    );
+}
+
+#[test]
+fn encode() {
+    for (duration, expected) in [
+        (Duration::ZERO, "S0"),
+        (Duration::from_secs(987_654_321), "S987_654_321"),
+        (Duration::from_millis(987_654_321_100), "S987_654_321.100"),
+        (Duration::from_millis(987_654_321_120), "S987_654_321.120"),
+        (Duration::from_millis(987_654_321_123), "S987_654_321.123"),
+        (
+            Duration::from_micros(987_654_321_123_400),
+            "S987_654_321.123_400",
+        ),
+        (
+            Duration::from_micros(987_654_321_123_450),
+            "S987_654_321.123_450",
+        ),
+        (
+            Duration::from_micros(987_654_321_123_456),
+            "S987_654_321.123_456",
+        ),
+        (
+            Duration::from_nanos(987_654_321_123_456_789),
+            "S987_654_321.123_456_789",
+        ),
+        (
+            Duration::from_nanos(9_223_372_036_854_775_807),
+            "S9_223_372_036.854_775_807",
+        ),
+    ] {
+        let msg = format!("{duration:?}");
+        let timestamp = SystemTime::UNIX_EPOCH.checked_add(duration).expect(&msg);
+        assert_eq!(timestamp.encode().expect(&msg).as_str(), expected);
+    }
+    assert_eq!(
+        SystemTime::UNIX_EPOCH
+            .checked_add(Duration::from_nanos(9_223_372_036_854_775_807 + 1))
+            .unwrap()
+            .encode(),
+        Err(EncodeError::InvalidTimestamp)
+    );
 }

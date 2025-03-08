@@ -1,22 +1,11 @@
-use jtoo::{escape_ascii, Decoder, Encode, EncodeError, Encoder, ErrorReason};
-
-#[test]
-fn encode() {
-    assert_eq!("abc".encode().unwrap().as_str(), r#""abc""#);
-    assert_eq!("abc".to_string().encode().unwrap().as_str(), r#""abc""#);
-    assert_eq!(
-        "abc"
-            .to_string()
-            .into_boxed_str()
-            .encode()
-            .unwrap()
-            .as_str(),
-        r#""abc""#
-    );
-}
+use jtoo::{escape_ascii, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason};
 
 #[test]
 fn append() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(encoder.append_string("a"), Err(EncodeError::UnclosedString));
+
     let mut encoder = Encoder::new();
     encoder.append_string("").unwrap();
     assert_eq!(encoder.as_str(), Ok(r#""""#));
@@ -24,10 +13,7 @@ fn append() {
     let mut encoder = Encoder::new();
     encoder.append_string("string1").unwrap();
     assert_eq!(encoder.as_str(), Ok(r#""string1""#));
-}
 
-#[test]
-fn escaped() {
     let mut encoder = Encoder::new();
     encoder.append_string("\x00 \x01 \x02 \x03 \x04 \x05 \x06 \x07 \x08 \x09 \x0a \x0b \x0c \x0d \x0e \x0f \x10 \x11 \x12 \x13 \x14 \x15 \x16 \x17 \x18 \x19 \x1a \x1b \x1c \x1d \x1e \x1f \" \\ \x7f").unwrap();
     assert_eq!(
@@ -39,20 +25,20 @@ fn escaped() {
 }
 
 #[test]
-fn unclosed_string() {
-    let mut encoder = Encoder::new();
-    encoder.open_string().unwrap();
-    assert_eq!(encoder.append_string("a"), Err(EncodeError::UnclosedString));
-}
-
-#[test]
-fn in_list() {
+fn append_in_list() {
     let mut encoder = Encoder::new();
     encoder.open_list().unwrap();
     encoder.append_string("a").unwrap();
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
     assert_eq!(encoder.as_str(), Ok(r#"["a",T]"#));
+}
+
+#[test]
+fn append_in_string() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(encoder.open_string(), Err(EncodeError::UnclosedString));
 }
 
 #[test]
@@ -97,4 +83,29 @@ fn consume() {
             Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason, "{msg}"),
         }
     }
+}
+
+#[test]
+fn decode() {
+    assert_eq!(String::decode(br#""a""#).unwrap().as_str(), "a");
+    assert_eq!(<Box<str>>::decode(br#""a""#).unwrap().as_ref(), "a");
+    assert_eq!(
+        <Vec<String>>::decode(br#"["a","abc"]"#).unwrap(),
+        vec!["a".to_string(), "abc".to_string()]
+    );
+}
+
+#[test]
+fn encode() {
+    assert_eq!("abc".encode().unwrap().as_str(), r#""abc""#);
+    assert_eq!("abc".to_string().encode().unwrap().as_str(), r#""abc""#);
+    assert_eq!(
+        "abc"
+            .to_string()
+            .into_boxed_str()
+            .encode()
+            .unwrap()
+            .as_str(),
+        r#""abc""#
+    );
 }
