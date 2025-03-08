@@ -1,5 +1,11 @@
 //! This crate implements the derive macros for the [`jtoo`](https://crates.io/crates/jtoo)
 //! `Decode` and `Encode` traits.
+//!
+//! # Development
+//!
+//! Inspect macro expansion:
+//! 1. Comment out tests except one
+//! 2. `cargo expand --package jtoo --test struct_test |less`
 #![forbid(unsafe_code)]
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
@@ -64,11 +70,6 @@ fn encode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
     let arms = data.variants.iter().map(|variant| {
         let variant_ident = &variant.ident;
         let variant_literal = Literal::string(&variant_ident.to_string());
-        let unit_arm = quote_spanned! {variant.span()=>
-            #enum_ident :: #variant_ident => {
-                encoder.append_string(#variant_literal)?;
-            }
-        };
         match &variant.fields {
             Fields::Unit => quote_spanned! {variant.span()=>
                 #enum_ident :: #variant_ident => {
@@ -220,6 +221,13 @@ fn assign_fields(fields: &syn::FieldsNamed) -> TokenStream {
 
 fn decode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
     match &data.fields {
+        Fields::Named(ref fields) if fields.named.is_empty() => {
+            quote! {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()?;
+                Ok(Self {})
+            }
+        }
         Fields::Named(ref fields) => {
             let read_fields_statements = read_named_fields(fields);
             let assign_fields_statements = assign_fields(fields);
@@ -231,6 +239,13 @@ fn decode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
                 };
                 decoder.consume_list_close()?;
                 Ok(value)
+            }
+        }
+        Fields::Unnamed(ref fields) if fields.unnamed.is_empty() => {
+            quote! {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()?;
+                Ok(Self())
             }
         }
         Fields::Unnamed(ref fields) => {

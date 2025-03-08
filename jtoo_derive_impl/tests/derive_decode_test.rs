@@ -20,6 +20,24 @@ fn struct_unit() {
 }
 
 #[test]
+fn struct_named_empty() {
+    let actual = derive_decode(quote! {
+        struct Struct0 {}
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Decode for Struct0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()?;
+                Ok(Self {})
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
 fn struct_named_field() {
     let actual = derive_decode(quote! {
         struct Struct0 {
@@ -194,6 +212,24 @@ fn struct_all_field_types() {
                 };
                 decoder.consume_list_close()?;
                 Ok(value)
+            }
+        }
+    };
+    assert_eq!(expected.to_string(), actual.to_string());
+}
+
+#[test]
+fn struct_tuple_empty() {
+    let actual = derive_decode(quote! {
+        struct Struct0();
+    })
+    .unwrap();
+    let expected = quote! {
+        impl jtoo::Decode for Struct0 {
+            fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
+                decoder.consume_list_open()?;
+                decoder.consume_list_close()?;
+                Ok(Self())
             }
         }
     };

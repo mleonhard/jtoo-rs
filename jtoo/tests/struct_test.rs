@@ -34,8 +34,8 @@ fn named() {
     struct Struct0 {
         pub field0: bool,
     }
-    let value = Struct0 { field0: true };
     const STRING: &str = "[[\"field0\",T]]";
+    let value = Struct0 { field0: true };
     assert_eq!(value.encode().unwrap(), STRING);
     assert_eq!(Struct0::decode(STRING.as_bytes()).unwrap(), value);
     assert_eq!(
@@ -69,6 +69,7 @@ fn many_fields() {
         pub field_r: Box<[bool]>,
         pub field_s: Vec<bool>,
     }
+    const STRING: &str = r#"[["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_k","6"],["field_l","7"],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#;
     let value = Struct0 {
         field_a: true,
         field_b: -1,
@@ -90,7 +91,6 @@ fn many_fields() {
         field_r: vec![true, false].into_boxed_slice(),
         field_s: vec![true, true, false],
     };
-    const STRING: &str = r#"[["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_k","6"],["field_l","7"],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#;
     assert_eq!(value.encode().unwrap(), STRING);
     assert_eq!(Struct0::decode(STRING.as_bytes()).unwrap(), value);
 }
@@ -139,22 +139,27 @@ fn nested() {
     struct Struct0 {
         pub field_a: bool,
     }
+
     #[derive(Decode, Encode, Debug, Eq, PartialEq)]
     struct Struct1(bool);
+
     #[derive(Decode, Encode, Debug, Eq, PartialEq)]
     struct Struct2 {}
+
+    #[allow(clippy::struct_field_names)]
     #[derive(Decode, Encode, Debug, Eq, PartialEq)]
     struct Struct3 {
         pub field_b: Struct0,
         pub field_c: Struct1,
         pub field_d: Struct2,
     }
+
+    const STRING: &str = r#"[["field_b",[["field_a",T]]],["field_c",[F]],["field_d",[]]]"#;
     let value = Struct3 {
         field_b: Struct0 { field_a: true },
         field_c: Struct1(false),
         field_d: Struct2 {},
     };
-    const STRING: &str = r#"[["field_b",[["field_a",T]]],["field_c",[F]],["field_d",[]]]"#;
     assert_eq!(value.encode().unwrap().as_str(), STRING);
     assert_eq!(Struct3::decode(STRING.as_bytes()).unwrap(), value);
 }
@@ -166,6 +171,6 @@ fn parameterized() {
     let value = Struct0(true);
     assert_eq!(value.encode(), Ok("[T]".to_string()));
 
-    let value: Struct0<u8> = Decode::decode(br#"[7]"#).unwrap();
+    let value: Struct0<u8> = Decode::decode(br"[7]").unwrap();
     assert_eq!(value, Struct0(7));
 }

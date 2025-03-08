@@ -65,8 +65,8 @@ fn named() {
     enum Enum0 {
         Variant0 { field0: bool },
     }
-    let value = Enum0::Variant0 { field0: true };
     const STRING: &str = r#"["Variant0",["field0",T]]"#;
+    let value = Enum0::Variant0 { field0: true };
     assert_eq!(value.encode().unwrap(), STRING);
     assert_eq!(Enum0::decode(STRING.as_bytes()).unwrap(), value);
     assert_eq!(
@@ -112,6 +112,7 @@ fn many_fields() {
             field_s: Vec<bool>,
         },
     }
+    const STRING: &str = r#"["Variant0",["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_k","6"],["field_l","7"],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#;
     let value = Enum0::Variant0 {
         field_a: true,
         field_b: -1,
@@ -133,7 +134,6 @@ fn many_fields() {
         field_r: vec![true, false].into_boxed_slice(),
         field_s: vec![true, true, false],
     };
-    const STRING: &str = r#"["Variant0",["field_a",T],["field_b",-1],["field_c",1],["field_d",-2],["field_e",2],["field_f",-3],["field_g",3],["field_h",-4],["field_i",4],["field_k","6"],["field_l","7"],["field_n",[10,11]],["field_o",[12,13]],["field_p",[T]],["field_r",[T,F]],["field_s",[T,T,F]]]"#;
     assert_eq!(value.encode().unwrap(), STRING);
     assert_eq!(Enum0::decode(STRING.as_bytes()).unwrap(), value);
 }
@@ -208,12 +208,12 @@ fn nested() {
             field_d: Enum2,
         },
     }
+    const STRING: &str = r#"["Variant3",["field_b",["Variant0",["field_a",T]]],["field_c",["Variant1",F]],["field_d",["Variant2"]]]"#;
     let value = Enum3::Variant3 {
         field_b: Enum0::Variant0 { field_a: true },
         field_c: Enum1::Variant1(false),
         field_d: Enum2::Variant2,
     };
-    const STRING: &str = r#"["Variant3",["field_b",["Variant0",["field_a",T]]],["field_c",["Variant1",F]],["field_d",["Variant2"]]]"#;
     assert_eq!(value.encode().unwrap().as_str(), STRING);
     assert_eq!(Enum3::decode(STRING.as_bytes()).unwrap(), value);
 }
