@@ -12,18 +12,6 @@ use quote::{format_ident, quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{parse_quote, Data, DataEnum, DataStruct, DeriveInput, Fields, GenericParam};
 
-/// Converts the bytes into an ASCII string.
-#[allow(clippy::missing_panics_doc)]
-pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
-    let mut result = String::new();
-    for byte in input.as_ref() {
-        for ascii_byte in core::ascii::escape_default(*byte) {
-            result.push_str(core::str::from_utf8(&[ascii_byte]).unwrap());
-        }
-    }
-    result
-}
-
 fn encode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
     let unit = quote! {
         encoder.open_list()?;
