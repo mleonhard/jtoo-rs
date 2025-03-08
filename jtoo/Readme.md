@@ -29,7 +29,7 @@ use time::OffsetDateTime;
 
 #[derive(Decode, Encode)]
 struct ShortMessage {
-    pub field0: OffsetDateTime,
+    pub field0: OffsetDateTime, // Needs "time" feature.
     pub field1: u32,
     pub field2: bool,
 }
