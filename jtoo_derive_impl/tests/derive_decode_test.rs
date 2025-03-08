@@ -11,7 +11,8 @@ fn struct_unit() {
         impl jtoo::Decode for Struct0 {
             fn decode_using(decoder: &mut jtoo::Decoder) -> Result<Self, jtoo::DecodeError> {
                 decoder.consume_list_open()?;
-                decoder.consume_list_close()
+                decoder.consume_list_close()?;
+                Ok(Self)
             }
         }
     };

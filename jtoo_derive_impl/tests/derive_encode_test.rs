@@ -3,10 +3,6 @@ use quote::quote;
 
 #[test]
 fn struct_unit() {
-    let actual = derive_encode(quote! {
-        struct Struct0;
-    })
-    .unwrap();
     let expected = quote! {
         impl jtoo::Encode for Struct0 {
             fn encode_using(&self, encoder: &mut jtoo::Encoder) -> Result<(), jtoo::EncodeError> {
@@ -14,8 +10,26 @@ fn struct_unit() {
                 encoder.close_list()
             }
         }
-    };
-    assert_eq!(expected.to_string(), actual.to_string());
+    }
+    .to_string();
+    assert_eq!(
+        derive_encode(quote! { struct Struct0; })
+            .unwrap()
+            .to_string(),
+        expected.to_string()
+    );
+    assert_eq!(
+        derive_encode(quote! { struct Struct0(); })
+            .unwrap()
+            .to_string(),
+        expected.to_string()
+    );
+    assert_eq!(
+        derive_encode(quote! { struct Struct0 {} })
+            .unwrap()
+            .to_string(),
+        expected.to_string()
+    );
 }
 
 #[test]

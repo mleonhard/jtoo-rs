@@ -1,16 +1,10 @@
 //! This crate implements the derive macros for the [`jtoo`](https://crates.io/crates/jtoo)
-//! `Encode` and `Decode` traits.
+//! `Decode` and `Encode` traits.
 #![forbid(unsafe_code)]
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::spanned::Spanned;
 use syn::{parse_quote, Data, DataEnum, DataStruct, DeriveInput, Fields, GenericParam};
-
-#[macro_export]
-macro_rules! dprintln {
-    // ($($args:tt)+) => { println!( $($args)+ ) };
-    ($($args:tt)+) => {};
-}
 
 /// Converts the bytes into an ASCII string.
 #[allow(clippy::missing_panics_doc)]
@@ -25,7 +19,12 @@ pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
 }
 
 fn encode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
+    let unit = quote! {
+        encoder.open_list()?;
+        encoder.close_list()
+    };
     match &data.fields {
+        Fields::Named(ref fields) if fields.named.is_empty() => unit,
         Fields::Named(ref fields) => {
             let per_field_calls = fields.named.iter().map(|field| {
                 let field_name = field.ident.as_ref().unwrap();
@@ -43,6 +42,7 @@ fn encode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
                 encoder.close_list()
             }
         }
+        Fields::Unnamed(ref fields) if fields.unnamed.is_empty() => unit,
         Fields::Unnamed(ref fields) => {
             let per_field_calls = fields.unnamed.iter().enumerate().map(|(n, field)| {
                 let index = Literal::usize_unsuffixed(n);
@@ -56,12 +56,7 @@ fn encode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
                 encoder.close_list()
             }
         }
-        Fields::Unit => {
-            quote! {
-                encoder.open_list()?;
-                encoder.close_list()
-            }
-        }
+        Fields::Unit => unit,
     }
 }
 
@@ -75,9 +70,16 @@ fn encode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
             }
         };
         match &variant.fields {
-            Fields::Unit => unit_arm,
-            Fields::Named(fields) if fields.named.is_empty() => unit_arm,
-            Fields::Unnamed(fields) if fields.unnamed.is_empty() => unit_arm,
+            Fields::Unit => quote_spanned! {variant.span()=>
+                #enum_ident :: #variant_ident => {
+                    encoder.append_string(#variant_literal)?;
+                }
+            },
+            Fields::Named(fields) if fields.named.is_empty() => quote_spanned! {variant.span()=>
+                #enum_ident :: #variant_ident { } => {
+                    encoder.append_string(#variant_literal)?;
+                }
+            },
             Fields::Named(fields) => {
                 let field_idents = fields
                     .named
@@ -97,6 +99,13 @@ fn encode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
                     #enum_ident :: #variant_ident { #(#field_idents ),* } => {
                         encoder.append_string(#variant_literal)?;
                         #(#encoder_calls)*
+                    }
+                }
+            }
+            Fields::Unnamed(fields) if fields.unnamed.is_empty() => {
+                quote_spanned! {variant.span()=>
+                    #enum_ident :: #variant_ident ( ) => {
+                        encoder.append_string(#variant_literal)?;
                     }
                 }
             }
@@ -242,7 +251,8 @@ fn decode_using_function_body_for_struct(data: &DataStruct) -> TokenStream {
         Fields::Unit => {
             quote! {
                 decoder.consume_list_open()?;
-                decoder.consume_list_close()
+                decoder.consume_list_close()?;
+                Ok(Self)
             }
         }
     }
@@ -252,13 +262,13 @@ fn decode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
     let arms = data.variants.iter().map(|variant| {
         let variant_ident = &variant.ident;
         let variant_literal = Literal::string(&variant_ident.to_string());
-        let unit_arm = quote_spanned! {variant.span()=>
-            #variant_literal => #enum_ident :: #variant_ident ,
-        };
         match &variant.fields {
-            Fields::Unit => unit_arm,
-            Fields::Named(fields) if fields.named.is_empty() => unit_arm,
-            Fields::Unnamed(fields) if fields.unnamed.is_empty() => unit_arm,
+            Fields::Unit => quote_spanned! {variant.span()=>
+                #variant_literal => #enum_ident :: #variant_ident ,
+            },
+            Fields::Named(fields) if fields.named.is_empty() => quote_spanned! {variant.span()=>
+                #variant_literal => #enum_ident :: #variant_ident {},
+            },
             Fields::Named(fields) => {
                 let read_fields_statements = read_named_fields(fields);
                 let assign_fields_statements = assign_fields(fields);
@@ -269,6 +279,11 @@ fn decode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
                             #assign_fields_statements
                         }
                     }
+                }
+            }
+            Fields::Unnamed(fields) if fields.unnamed.is_empty() => {
+                quote_spanned! {variant.span()=>
+                    #variant_literal => #enum_ident :: #variant_ident (),
                 }
             }
             Fields::Unnamed(fields) => {
@@ -300,7 +315,7 @@ fn decode_using_function_body_for_enum(enum_ident: &Ident, data: &DataEnum) -> T
 pub fn derive_decode(stream: TokenStream) -> Result<TokenStream, syn::Error> {
     let input: DeriveInput = syn::parse2(stream)?;
 
-    // Add a bound `T: Encode` to every type parameter T.
+    // Add a bound `T: Decode` to every type parameter T.
     let mut generics = input.generics;
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {

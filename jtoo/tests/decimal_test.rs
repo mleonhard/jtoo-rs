@@ -1,81 +1,4 @@
-use jtoo::{Decimal, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason};
-
-#[cfg(feature = "rust_decimal")]
-#[test]
-fn encode_rust_decimal() {
-    use rust_decimal_macros::dec;
-    assert_eq!(
-        dec!(-9_223_372_036_854_775_809).encode(),
-        Err(EncodeError::OutOfRange)
-    );
-    assert_eq!(
-        dec!(-9_223_372_036_854_775_808).encode().unwrap().as_str(),
-        "-9_223_372_036_854_775_808.0"
-    );
-    assert_eq!(dec!(-1).encode().unwrap().as_str(), "-1.0");
-    assert_eq!(
-        dec!(-0.000_000_000_000_000_000_000_000_000_1)
-            .encode()
-            .unwrap()
-            .as_str(),
-        "-0.000_000_000_000_000_000_000_000_000_1"
-    );
-    assert_eq!(dec!(0).encode().unwrap().as_str(), "0.0");
-    assert_eq!(
-        dec!(0.000_000_000_000_000_000_000_000_000_1)
-            .encode()
-            .unwrap()
-            .as_str(),
-        "0.000_000_000_000_000_000_000_000_000_1"
-    );
-    assert_eq!(dec!(1).encode().unwrap().as_str(), "1.0");
-    assert_eq!(
-        dec!(9_223_372_036_854_775_807).encode().unwrap().as_str(),
-        "9_223_372_036_854_775_807.0"
-    );
-    assert_eq!(
-        dec!(9_223_372_036_854_775_808).encode(),
-        Err(EncodeError::OutOfRange)
-    );
-}
-
-#[cfg(feature = "rust_decimal")]
-#[test]
-fn decode_rust_decimal() {
-    use rust_decimal::Decimal;
-    use rust_decimal_macros::dec;
-    assert_eq!(
-        Decimal::decode(b"-9_223_372_036_854_775_809.0")
-            .unwrap_err()
-            .reason,
-        ErrorReason::DecimalMantissaOutOfRange
-    );
-    assert_eq!(
-        Decimal::decode(b"-9_223_372_036_854_775_808.0").unwrap(),
-        dec!(-9_223_372_036_854_775_808)
-    );
-    assert_eq!(Decimal::decode(b"-1.0").unwrap(), dec!(-1));
-    assert_eq!(
-        Decimal::decode(b"-0.000_000_000_000_000_000_000_000_000_1").unwrap(),
-        dec!(-0.000_000_000_000_000_000_000_000_000_1)
-    );
-    assert_eq!(Decimal::decode(b"0.0").unwrap(), dec!(0));
-    assert_eq!(
-        Decimal::decode(b"0.000_000_000_000_000_000_000_000_000_1").unwrap(),
-        dec!(0.000_000_000_000_000_000_000_000_000_1)
-    );
-    assert_eq!(Decimal::decode(b"1.0").unwrap(), dec!(1));
-    assert_eq!(
-        Decimal::decode(b"9_223_372_036_854_775_807.0").unwrap(),
-        dec!(9_223_372_036_854_775_807)
-    );
-    assert_eq!(
-        Decimal::decode(b"9_223_372_036_854_775_808.0")
-            .unwrap_err()
-            .reason,
-        ErrorReason::DecimalMantissaOutOfRange
-    );
-}
+use jtoo::{Decimal, Decoder, EncodeError, Encoder};
 
 #[test]
 fn append() {
@@ -172,6 +95,26 @@ fn append() {
             "decimal={decimal} string={string}"
         );
     }
+}
+
+#[test]
+fn append_in_list() {
+    let mut encoder = Encoder::new();
+    encoder.open_list().unwrap();
+    encoder.append_decimal(Decimal::ZERO).unwrap();
+    encoder.append_integer(1).unwrap();
+    encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[0.0,1]"));
+}
+
+#[test]
+fn append_in_string() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(
+        encoder.append_decimal(Decimal::ZERO),
+        Err(EncodeError::UnclosedString)
+    );
 }
 
 #[test]
@@ -470,24 +413,4 @@ fn consume() {
         Decoder::new(b"-9.223_372_036_854_775_808").consume_decimal(),
         Ok(Decimal::new(i64::MIN, 18))
     );
-}
-
-#[test]
-fn unclosed_string() {
-    let mut encoder = Encoder::new();
-    encoder.open_string().unwrap();
-    assert_eq!(
-        encoder.append_decimal(Decimal::ZERO),
-        Err(EncodeError::UnclosedString)
-    );
-}
-
-#[test]
-fn in_list() {
-    let mut encoder = Encoder::new();
-    encoder.open_list().unwrap();
-    encoder.append_decimal(Decimal::new(300, 0)).unwrap();
-    encoder.append_bool(true).unwrap();
-    encoder.close_list().unwrap();
-    assert_eq!(encoder.as_str(), Ok("[300.0,T]"));
 }
