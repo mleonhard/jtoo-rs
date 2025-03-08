@@ -58,6 +58,11 @@ pub use decoder::*;
 pub use encode::*;
 pub use encoder::*;
 
+#[cfg(feature = "jtoo_derive")]
+pub mod derive {
+    pub use jtoo_derive::*;
+}
+
 /// Converts a byte slice into a string using
 /// [`core::ascii::escape_default`](https://doc.rust-lang.org/core/ascii/fn.escape_default.html)
 /// to escape each byte.

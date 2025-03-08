@@ -1,6 +1,6 @@
 use crate::decimal::Decimal;
 use crate::EncodeError;
-use std::iter::repeat;
+use std::iter::{repeat, repeat_n};
 use std::ops::Rem;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -240,8 +240,7 @@ impl Encoder {
         if lhs_len == 0 {
             self.string.push('0');
         }
-        for (n, digit) in repeat(0)
-            .take(rhs_len.saturating_sub(digits_len))
+        for (n, digit) in repeat_n(0, rhs_len.saturating_sub(digits_len))
             .chain(digits_array.iter().take(digits_len).rev().copied())
             .chain(repeat(0))
             .take(lhs_len + rhs_len)

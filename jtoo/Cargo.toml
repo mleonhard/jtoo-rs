@@ -9,9 +9,12 @@ name = "jtoo"
 repository = "https://github.com/mleonhard/jtoo-rs"
 version = "0.1.0"
 
+[features]
+default = ["jtoo_derive"]
+
 [dependencies]
 # TODO: Remove transitive dependency on unsafe `arrayvec` crate.
-jtoo_derive = { version = "0.1", path = "../jtoo_derive" }
+jtoo_derive = { version = "0.1", path = "../jtoo_derive", optional = true }
 rust_decimal = { version = "1", default-features = false, optional = true }
 time = { version = "0.3", default-features = false, optional = true }
 

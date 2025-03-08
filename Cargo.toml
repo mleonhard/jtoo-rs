@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "bench",
     "jtoo",
     "jtoo_derive",
     "jtoo_derive_impl",

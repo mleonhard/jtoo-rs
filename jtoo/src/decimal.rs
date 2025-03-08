@@ -51,6 +51,6 @@ impl Display for Decimal {
         let mut encoder = Encoder::new();
         encoder.append_decimal(*self).unwrap();
         let s = encoder.as_str().unwrap();
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

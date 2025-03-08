@@ -9,12 +9,12 @@ top_level_dir=$(pwd)
 set -e
 set -x
 
-time cargo check --all-targets --all-features
-time cargo build --all-targets --all-features
+time cargo check --workspace --exclude bench --all-targets --all-features
+time cargo build --workspace --exclude bench --all-targets --all-features
 time cargo fmt --all -- --check
-time cargo clippy --all-targets --all-features -- -D clippy::pedantic
-time cargo test --all-targets --all-features
-time cargo test --doc
+time cargo clippy --workspace --exclude bench --all-targets --all-features -- -D clippy::pedantic
+time cargo test --workspace --exclude bench --all-targets --all-features
+time cargo test --workspace --exclude bench --doc
 
 for project in $projects ; do
   cd "$top_level_dir/$project/"

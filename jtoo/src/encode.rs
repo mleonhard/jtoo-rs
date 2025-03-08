@@ -1,5 +1,5 @@
 use crate::encoder::Encoder;
-use crate::{ByteString, DateTimeOffset, Decimal};
+use crate::{ByteString, DateTimeOffset};
 use std::time::SystemTime;
 
 #[allow(clippy::module_name_repetitions)]
@@ -162,7 +162,7 @@ impl Encode for rust_decimal::Decimal {
         let value = self.normalize();
         let mantissa = value.mantissa().to_i64().ok_or(EncodeError::OutOfRange)?;
         let exponent = u8::try_from(value.scale()).map_err(|_| EncodeError::OutOfRange)?;
-        let jtoo_decimal = Decimal::new(mantissa, exponent);
+        let jtoo_decimal = crate::Decimal::new(mantissa, exponent);
         encoder.append_decimal(jtoo_decimal)
     }
 }
