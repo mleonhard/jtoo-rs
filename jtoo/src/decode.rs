@@ -82,11 +82,11 @@ pub trait Decode {
         Self: Sized;
 
     #[allow(clippy::missing_errors_doc)]
-    fn decode(bytes: &[u8]) -> Result<Self, DecodeError>
+    fn decode(bytes: impl AsRef<[u8]>) -> Result<Self, DecodeError>
     where
         Self: Sized,
     {
-        let mut decoder = Decoder::new(bytes);
+        let mut decoder = Decoder::new(bytes.as_ref());
         Self::decode_using(&mut decoder)
     }
 }

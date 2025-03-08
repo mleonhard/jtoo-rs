@@ -17,11 +17,10 @@
 extern crate test;
 
 use jtoo::Decode;
-use jtoo::derive::Decode;
 use serde::Deserialize;
 use test::Bencher;
-use time::OffsetDateTime;
 use time::serde::iso8601;
+use time::OffsetDateTime;
 
 #[derive(Deserialize, Decode)]
 #[allow(dead_code)]

@@ -1,64 +1,53 @@
 jtoo
 ========
 [![crates.io version](https://img.shields.io/crates/v/jtoo.svg)](https://crates.io/crates/jtoo)
-[![license: Apache 2.0](https://raw.githubusercontent.com/mleonhard/jtoo/main/license-apache-2.0.svg)](http://www.apache.org/licenses/LICENSE-2.0)
+[![license: Apache 2.0](https://raw.githubusercontent.com/mleonhard/jtoo-rs/main/license-apache-2.0.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 [![unsafe forbidden](https://raw.githubusercontent.com/mleonhard/jtoo-rs/main/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 [![pipeline status](https://github.com/mleonhard/jtoo-rs/workflows/CI/badge.svg)](https://github.com/mleonhard/jtoo-rs/actions)
 
-A Rust library for serializing and deserializing the [JTOO data format](https://github.com/mleonhard/jtoo-format).
+A Rust library for serializing and deserializing the human-readable [JTOO data format](https://github.com/mleonhard/jtoo-format).
 
 # Features
 - `forbid(unsafe_code)`
 - Minimal dependencies
-- Good test coverage (97%)
+- Good test coverage (100%)
 
 # Limitations
 - New, not proven in production.
 - Todo:
-    - Derive Encode trait
-    - Derive Decode trait
-    - Support interned strings
-    - Support aliases
-    - Support enums and type discrimination
+    - `chrono`
+    - `HashMap<K,V>`
+    - `HashSet<T>`
+    - JTOO framing
+    - HTOO
+    - Improve error messages
 
-Simple example:
+# Example
 ```rust
-// TODO: Fix example.
-//use jtoo::{Unpack};
-//
-//#[derive(Unpack)]
-//struct Message {
-//    name: String,
-//}
-//fn parse(message_bytes: &[u8]) -> Result<Message, String> {
-//    let message = Message::unpack(message_bytes)
-//        .map_err(|e| format!("error processing {} byte message: {e}", message_bytes.len()))?;
-//    return message;
-//}
+use jtoo::{Decode, Encode};
+use time::OffsetDateTime;
+
+#[derive(Decode, Encode)]
+struct ShortMessage {
+    pub field0: OffsetDateTime,
+    pub field1: u32,
+    pub field2: bool,
+}
+let text =
+  r#"[["field0",D1970-01-01T00:00:00Z],["field1",42],["field2",T]]"#;
+let msg = ShortMessage::decode(text).unwrap();
+let text2 = msg.encode().unwrap();
+assert_eq!(text, &text2);
 ```
+
+# Performance
+[Benchmark](https://github.com/mleonhard/jtoo-rs/blob/b28579f83cad2a72685452bd5d67899445e46b3c/bench/benches/lib.rs) result:
+- [serde_json](https://crates.io/crates/serde_json): 169ns
+- jtoo: 225ns (33% slower)
+
 # Cargo Geiger Safety Report
-```
-
-Metric output format: x/y
-    x = unsafe code used by the build
-    y = total unsafe code found in the crate
-
-Symbols: 
-    🔒  = No `unsafe` usage found, declares #![forbid(unsafe_code)]
-    ❓  = No `unsafe` usage found, missing #![forbid(unsafe_code)]
-    ☢️  = `unsafe` usage found
-
-Functions  Expressions  Impls  Traits  Methods  Dependency
-
-0/0        0/0          0/0    0/0     0/0      🔒  jtoo 0.1.0
-
-0/0        0/0          0/0    0/0     0/0    
-
-```
-# Alternatives
-- [serde_json](https://crates.io/crates/serde_json)
 
 # Changelog
 - v0.1.0 - Initial version.
 
-License: MIT OR Apache-2.0
+License: Apache-2.0

@@ -1,5 +1,4 @@
 use jtoo::{Decode, Encode, ErrorReason};
-use jtoo_derive::{Decode, Encode};
 
 #[test]
 fn unknown_variant() {

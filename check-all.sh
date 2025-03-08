@@ -14,7 +14,7 @@ time cargo build --workspace --exclude bench --all-targets --all-features
 time cargo fmt --all -- --check
 time cargo clippy --workspace --exclude bench --all-targets --all-features -- -D clippy::pedantic
 time cargo test --workspace --exclude bench --all-targets --all-features
-time cargo test --workspace --exclude bench --doc
+time cargo test --workspace --exclude bench --all-features --doc
 
 for project in $projects ; do
   cd "$top_level_dir/$project/"
