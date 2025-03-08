@@ -118,7 +118,7 @@ fn consume_unsigned_integer() {
     for (bytes, expected) in [
         (b"".as_slice(), Err(ErrorReason::ExpectedUnsignedInteger)),
         (b"\"a\"", Err(ErrorReason::ExpectedUnsignedInteger)),
-        (b"Y", Err(ErrorReason::ExpectedUnsignedInteger)),
+        (b"T", Err(ErrorReason::ExpectedUnsignedInteger)),
         (b"!", Err(ErrorReason::ExpectedUnsignedInteger)),
         (b"-", Err(ErrorReason::ExpectedUnsignedInteger)),
         (b"-1", Err(ErrorReason::ExpectedUnsignedInteger)),

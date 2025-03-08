@@ -1,3 +1,4 @@
+use crate::Encoder;
 use std::fmt::{Display, Formatter};
 
 /// A decimal number stored in base-10: `mantissa x 10^exponent`.
@@ -47,6 +48,9 @@ impl Default for Decimal {
 
 impl Display for Decimal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}x10^-{}", self.mantissa, self.neg_exponent)
+        let mut encoder = Encoder::new();
+        encoder.append_decimal(*self).unwrap();
+        let s = encoder.as_str().unwrap();
+        write!(f, "{}", s)
     }
 }

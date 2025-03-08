@@ -1,4 +1,4 @@
-use jtoo::{Decimal, Decoder, EncodeError, Encoder};
+use jtoo::{escape_ascii, Decimal, Decoder, EncodeError, Encoder, ErrorReason};
 
 #[test]
 fn append() {
@@ -413,4 +413,64 @@ fn consume() {
         Decoder::new(b"-9.223_372_036_854_775_808").consume_decimal(),
         Ok(Decimal::new(i64::MIN, 18))
     );
+    for b in [
+        b"_1.0".as_slice(),
+        b"1__000.0".as_slice(),
+        b"1_0_00.0".as_slice(),
+        b"1_00_0.0".as_slice(),
+        b"1000.0".as_slice(),
+        b"1_0000.0".as_slice(),
+        b"0.0001".as_slice(),
+        b"0._0".as_slice(),
+        b"0.0_".as_slice(),
+        b"0.00_".as_slice(),
+        b"0_.0".as_slice(),
+        b"0_0.0".as_slice(),
+        b"0_00.0".as_slice(),
+        b".".as_slice(),
+        b"0_".as_slice(),
+        b"0_0".as_slice(),
+        b"0_00".as_slice(),
+    ] {
+        assert_eq!(
+            Decoder::new(b).consume_decimal().unwrap_err().reason,
+            ErrorReason::IncorrectDigitGrouping,
+            "{}",
+            escape_ascii(b)
+        );
+    }
+    for b in [
+        b"0.".as_slice(),
+        b"0..".as_slice(),
+        b"0.0.".as_slice(),
+        b"0.00.".as_slice(),
+        b"0.000.".as_slice(),
+        b"0".as_slice(),
+        b"00".as_slice(),
+        b"000".as_slice(),
+        b"0_000".as_slice(),
+        b"1.0x".as_slice(),
+    ] {
+        assert_eq!(
+            Decoder::new(b).consume_decimal().unwrap_err().reason,
+            ErrorReason::MalformedDecimal,
+            "{}",
+            escape_ascii(b)
+        );
+    }
+    assert_eq!(
+        Decoder::new(b"-0.0").consume_decimal().unwrap_err().reason,
+        ErrorReason::NegativeZero,
+    );
+}
+
+#[test]
+fn default() {
+    assert_eq!(Decimal::default(), Decimal::ZERO);
+}
+
+#[test]
+fn display() {
+    assert_eq!(format!("{}", Decimal::ZERO), "0.0");
+    assert_eq!(format!("{}", Decimal::new(12345, 2)), "123.45");
 }

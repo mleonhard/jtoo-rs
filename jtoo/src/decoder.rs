@@ -185,9 +185,6 @@ impl<'a> Decoder<'a> {
     /// # Errors
     /// Returns `Err` when the next item in the buffer is not an unsigned integer, or the buffer is empty.
     pub fn consume_unsigned_integer(&mut self) -> Result<u64, DecodeError> {
-        if !matches!(self.bytes.first().copied(), Some(b'0'..=b'9' | b'_')) {
-            return Err(self.err(ErrorReason::ExpectedUnsignedInteger));
-        }
         let Some(value) = self.consume_integer_part()? else {
             return Err(self.err(ErrorReason::ExpectedUnsignedInteger));
         };
@@ -399,14 +396,14 @@ impl<'a> Decoder<'a> {
             }
             pub fn finish(&mut self) -> Result<(), ErrorReason> {
                 match self {
-                    FormatChecker::Start0 => Err(ErrorReason::ExpectedDecimal),
-                    FormatChecker::Start1 => Ok(()),
-                    FormatChecker::Start2 => Ok(()),
-                    FormatChecker::Start3 => Ok(()),
+                    FormatChecker::Start0
+                    | FormatChecker::Start1
+                    | FormatChecker::Start2
+                    | FormatChecker::Start3 => Err(ErrorReason::MalformedDecimal),
                     FormatChecker::Left0 => Err(ErrorReason::IncorrectDigitGrouping),
                     FormatChecker::Left1 => Err(ErrorReason::IncorrectDigitGrouping),
                     FormatChecker::Left2 => Err(ErrorReason::IncorrectDigitGrouping),
-                    FormatChecker::Left3 => Ok(()),
+                    FormatChecker::Left3 => Err(ErrorReason::MalformedDecimal),
                     FormatChecker::Right0 => Err(ErrorReason::MalformedDecimal),
                     FormatChecker::Right1 => Ok(()),
                     FormatChecker::Right2 => Ok(()),

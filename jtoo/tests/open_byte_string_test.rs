@@ -16,6 +16,10 @@ fn append() {
 
     let mut encoder = Encoder::new();
     encoder.open_byte_string().unwrap();
+    assert_eq!(encoder.as_str(), Err(EncodeError::UnclosedByteString));
+
+    let mut encoder = Encoder::new();
+    encoder.open_byte_string().unwrap();
     encoder.close_byte_string().unwrap();
     assert_eq!(encoder.as_str(), Ok("B"));
 

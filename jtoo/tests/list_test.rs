@@ -140,6 +140,8 @@ fn decode() {
         Vec::<Vec<u8>>::decode(b"[[1],[2,3]]").unwrap(),
         vec![vec![1], vec![2, 3]]
     );
+    assert_eq!(Option::<bool>::decode(b"[T]").unwrap(), Some(true));
+    assert_eq!(Option::<bool>::decode(b"[]").unwrap(), None);
 }
 
 #[test]
