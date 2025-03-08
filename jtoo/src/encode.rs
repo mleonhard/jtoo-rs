@@ -1,5 +1,5 @@
 use crate::encoder::Encoder;
-use crate::{DateTimeOffset, Decimal};
+use crate::{ByteString, DateTimeOffset, Decimal};
 use std::time::SystemTime;
 
 #[allow(clippy::module_name_repetitions)]
@@ -124,6 +124,13 @@ impl<T: Encode> Encode for Box<[T]> {
 impl<T: Encode> Encode for Vec<T> {
     fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
         self.as_slice().encode_using(encoder)
+    }
+}
+impl Encode for ByteString {
+    fn encode_using(&self, encoder: &mut Encoder) -> Result<(), EncodeError> {
+        encoder.open_byte_string()?;
+        encoder.append_byte_string(&self.0)?;
+        encoder.close_byte_string()
     }
 }
 impl Encode for SystemTime {

@@ -1,15 +1,24 @@
-use jtoo::{escape_ascii, Decoder, EncodeError, Encoder, ErrorReason};
+use jtoo::{
+    escape_ascii, ByteString, Decimal, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason,
+};
 
 #[test]
-fn empty() {
+fn append() {
+    let mut encoder = Encoder::new();
+    assert_eq!(
+        encoder.append_byte_string(&[0x0]),
+        Err(EncodeError::NotInByteString)
+    );
+    assert_eq!(
+        encoder.close_byte_string(),
+        Err(EncodeError::NotInByteString)
+    );
+
     let mut encoder = Encoder::new();
     encoder.open_byte_string().unwrap();
     encoder.close_byte_string().unwrap();
     assert_eq!(encoder.as_str(), Ok("B"));
-}
 
-#[test]
-fn append() {
     let mut encoder = Encoder::new();
     encoder.open_byte_string().unwrap();
     encoder
@@ -20,58 +29,76 @@ fn append() {
         .unwrap();
     encoder.close_byte_string().unwrap();
     assert_eq!(encoder.as_str(), Ok("B0f1e2d3c4b5a69788796a5b4c3d2e1f0"));
-}
 
-#[test]
-fn append_twice() {
     let mut encoder = Encoder::new();
     encoder.open_byte_string().unwrap();
     encoder.append_byte_string(&[0x0f, 0x1e]).unwrap();
     encoder.append_byte_string(&[0x2d, 0x3c]).unwrap();
     encoder.close_byte_string().unwrap();
     assert_eq!(encoder.as_str(), Ok("B0f1e2d3c"));
-}
 
-#[test]
-fn unclosed_string() {
-    let mut encoder = Encoder::new();
-    encoder.open_string().unwrap();
-    assert_eq!(encoder.open_byte_string(), Err(EncodeError::UnclosedString));
-}
-
-#[test]
-fn in_list() {
-    let mut encoder = Encoder::new();
-    encoder.open_list().unwrap();
-    encoder.open_byte_string().unwrap();
-    encoder.close_byte_string().unwrap();
-    encoder.append_bool(true).unwrap();
-    encoder.close_list().unwrap();
-    assert_eq!(encoder.as_str(), Ok("[B,T]"));
-}
-
-#[test]
-fn unclosed() {
     let mut encoder = Encoder::new();
     encoder.open_byte_string().unwrap();
     assert_eq!(
         encoder.append_bool(true),
         Err(EncodeError::UnclosedByteString)
     );
-    assert_eq!(encoder.as_str(), Err(EncodeError::UnclosedByteString));
+    assert_eq!(encoder.append_byte_string(b"abc"), Ok(()));
+    assert_eq!(
+        encoder.append_date_time_offset(1, 1, 1, 1, 1, 1, 1, 1, 1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_decimal(Decimal::ZERO),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_integer(1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_string("abc"),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_timestamp_seconds(1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_timestamp_milliseconds(1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_timestamp_microseconds(1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.append_timestamp_nanosecond(1),
+        Err(EncodeError::UnclosedByteString)
+    );
+    assert_eq!(
+        encoder.open_byte_string(),
+        Err(EncodeError::UnclosedByteString)
+    );
 }
 
 #[test]
-fn not_in_byte_string() {
+fn append_in_list() {
     let mut encoder = Encoder::new();
-    assert_eq!(
-        encoder.append_byte_string(&[0x0]),
-        Err(EncodeError::NotInByteString)
-    );
-    assert_eq!(
-        encoder.close_byte_string(),
-        Err(EncodeError::NotInByteString)
-    );
+    encoder.open_list().unwrap();
+    encoder.open_byte_string().unwrap();
+    encoder.append_byte_string(&[0]).unwrap();
+    encoder.close_byte_string().unwrap();
+    encoder.append_bool(true).unwrap();
+    encoder.close_list().unwrap();
+    assert_eq!(encoder.as_str(), Ok("[B00,T]"));
+}
+
+#[test]
+fn append_in_string() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(encoder.open_byte_string(), Err(EncodeError::UnclosedString));
 }
 
 #[test]
@@ -110,4 +137,22 @@ fn consume() {
             Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason),
         }
     }
+}
+
+#[test]
+fn decode() {
+    assert_eq!(ByteString::decode(b"B").unwrap(), ByteString(vec![]));
+    assert_eq!(
+        ByteString::decode(b"B07020f").unwrap(),
+        ByteString(vec![7, 2, 15])
+    );
+}
+
+#[test]
+fn encode() {
+    assert_eq!(ByteString(vec![]).encode().unwrap().as_str(), "B");
+    assert_eq!(
+        ByteString(vec![7, 2, 15]).encode().unwrap().as_str(),
+        "B07020f"
+    );
 }

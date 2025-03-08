@@ -1,5 +1,5 @@
 use crate::decoder::Decoder;
-use crate::{escape_ascii, DateTimeOffset};
+use crate::{escape_ascii, ByteString, DateTimeOffset};
 use core::fmt::Debug;
 use std::time::{Duration, SystemTime};
 
@@ -180,6 +180,11 @@ impl<T: Decode> Decode for Vec<T> {
         }
         decoder.consume_list_close()?;
         Ok(result)
+    }
+}
+impl Decode for ByteString {
+    fn decode_using(decoder: &mut Decoder) -> Result<Self, DecodeError> {
+        Ok(ByteString(decoder.consume_byte_string()?))
     }
 }
 impl Decode for SystemTime {

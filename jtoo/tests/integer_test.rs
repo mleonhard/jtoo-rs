@@ -1,16 +1,4 @@
-use jtoo::{escape_ascii, Decoder, Encode, EncodeError, Encoder, ErrorReason};
-
-#[test]
-fn encode() {
-    assert_eq!((-42i8).encode().unwrap().as_str(), "-42");
-    assert_eq!((-42i16).encode().unwrap().as_str(), "-42");
-    assert_eq!((-42i32).encode().unwrap().as_str(), "-42");
-    assert_eq!((-42i64).encode().unwrap().as_str(), "-42");
-    assert_eq!(42u8.encode().unwrap().as_str(), "42");
-    assert_eq!(42u16.encode().unwrap().as_str(), "42");
-    assert_eq!(42u32.encode().unwrap().as_str(), "42");
-    assert_eq!(42u64.encode().unwrap().as_str(), "42");
-}
+use jtoo::{escape_ascii, Decode, Decoder, Encode, EncodeError, Encoder, ErrorReason};
 
 #[test]
 fn append() {
@@ -40,20 +28,20 @@ fn append() {
 }
 
 #[test]
-fn unclosed_string() {
-    let mut encoder = Encoder::new();
-    encoder.open_string().unwrap();
-    assert_eq!(encoder.append_integer(1), Err(EncodeError::UnclosedString));
-}
-
-#[test]
-fn in_list() {
+fn append_in_list() {
     let mut encoder = Encoder::new();
     encoder.open_list().unwrap();
     encoder.append_integer(1).unwrap();
     encoder.append_bool(true).unwrap();
     encoder.close_list().unwrap();
     assert_eq!(encoder.as_str(), Ok("[1,T]"));
+}
+
+#[test]
+fn append_in_string() {
+    let mut encoder = Encoder::new();
+    encoder.open_string().unwrap();
+    assert_eq!(encoder.append_integer(1), Err(EncodeError::UnclosedString));
 }
 
 #[test]
@@ -177,4 +165,28 @@ fn consume_unsigned_integer() {
             Err(reason) => assert_eq!(result.expect_err(&msg).reason, reason, "{msg}"),
         }
     }
+}
+
+#[test]
+fn decode() {
+    assert_eq!(i8::decode(b"-42").unwrap(), -42);
+    assert_eq!(i16::decode(b"-42").unwrap(), -42);
+    assert_eq!(i32::decode(b"-42").unwrap(), -42);
+    assert_eq!(i64::decode(b"-42").unwrap(), -42);
+    assert_eq!(u8::decode(b"42").unwrap(), 42);
+    assert_eq!(u16::decode(b"42").unwrap(), 42);
+    assert_eq!(u32::decode(b"42").unwrap(), 42);
+    assert_eq!(u64::decode(b"42").unwrap(), 42);
+}
+
+#[test]
+fn encode() {
+    assert_eq!((-42i8).encode().unwrap().as_str(), "-42");
+    assert_eq!((-42i16).encode().unwrap().as_str(), "-42");
+    assert_eq!((-42i32).encode().unwrap().as_str(), "-42");
+    assert_eq!((-42i64).encode().unwrap().as_str(), "-42");
+    assert_eq!(42u8.encode().unwrap().as_str(), "42");
+    assert_eq!(42u16.encode().unwrap().as_str(), "42");
+    assert_eq!(42u32.encode().unwrap().as_str(), "42");
+    assert_eq!(42u64.encode().unwrap().as_str(), "42");
 }

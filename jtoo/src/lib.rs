@@ -84,3 +84,6 @@ pub fn escape_ascii(input: impl AsRef<[u8]>) -> String {
     }
     result
 }
+
+#[derive(Clone, Debug, Default, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct ByteString(pub Vec<u8>);
