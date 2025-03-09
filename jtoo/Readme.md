@@ -46,7 +46,48 @@ assert_eq!(text, &text2);
 - jtoo: 225ns (33% slower)
 
 # Cargo Geiger Safety Report
+```
 
+Metric output format: x/y
+    x = unsafe code used by the build
+    y = total unsafe code found in the crate
+
+Symbols:
+    🔒  = No `unsafe` usage found, declares #![forbid(unsafe_code)]
+    ❓  = No `unsafe` usage found, missing #![forbid(unsafe_code)]
+    ☢️  = `unsafe` usage found
+
+Functions  Expressions  Impls  Traits  Methods  Dependency
+
+0/0        0/0          0/0    0/0     0/0      🔒  jtoo 0.1.0
+0/0        0/0          0/0    0/0     0/0      🔒  ├── jtoo_derive 0.1.0
+0/0        0/0          0/0    0/0     0/0      🔒  │   ├── jtoo_derive_impl 0.1.0
+0/0        14/14        0/0    0/0     3/3      ☢️  │   │   ├── proc-macro2 1.0.94
+0/0        4/4          0/0    0/0     0/0      ☢️  │   │   │   └── unicode-ident 1.0.18
+0/0        0/0          0/0    0/0     0/0      ❓  │   │   ├── quote 1.0.39
+0/0        14/14        0/0    0/0     3/3      ☢️  │   │   │   └── proc-macro2 1.0.94
+0/0        88/88        3/3    0/0     2/2      ☢️  │   │   └── syn 2.0.99
+0/0        14/14        0/0    0/0     3/3      ☢️  │   │       ├── proc-macro2 1.0.94
+0/0        0/0          0/0    0/0     0/0      ❓  │   │       ├── quote 1.0.39
+0/0        4/4          0/0    0/0     0/0      ☢️  │   │       └── unicode-ident 1.0.18
+0/0        14/14        0/0    0/0     3/3      ☢️  │   ├── proc-macro2 1.0.94
+0/0        88/88        3/3    0/0     2/2      ☢️  │   └── syn 2.0.99
+0/0        0/0          0/0    0/0     0/0      🔒  ├── rust_decimal 1.36.0
+2/2        340/340      2/2    0/0     7/7      ☢️  │   ├── arrayvec 0.7.6
+0/0        0/0          0/0    0/0     0/0      ❓  │   └── num-traits 0.2.19
+                                                       │       [build-dependencies]
+0/0        0/0          0/0    0/0     0/0      ❓  │       └── autocfg 1.4.0
+2/5        314/342      0/0    0/0     6/6      ☢️  └── time 0.3.39
+1/1        4/4          0/0    0/0     1/1      ☢️      ├── deranged 0.3.11
+0/0        0/0          0/0    0/0     0/0      ❓      │   ├── num-traits 0.2.19
+2/2        29/29        0/0    0/0     0/0      ☢️      │   └── powerfmt 0.2.0
+0/0        0/0          0/0    0/0     0/0      ❓      ├── num-conv 0.1.0
+2/2        29/29        0/0    0/0     0/0      ☢️      ├── powerfmt 0.2.0
+0/0        0/0          0/0    0/0     0/0      ❓      └── time-core 0.1.3
+
+7/10       793/821      5/5    0/0     19/19
+
+```
 # Changelog
 - v0.1.0 - Initial version.
 
