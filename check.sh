@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+top_level_dir=$(
+  cd "$(dirname $0)"
+  pwd
+)
 echo PWD=$PWD
 set -e
 set -x
@@ -12,6 +16,6 @@ time cargo clippy --all-targets --all-features -- -D clippy::pedantic
 time cargo test --tests
 time cargo test --all-targets --all-features
 time cargo test --doc --all-features
-./check-readme.sh
+"$top_level_dir"/check-readme.sh
 time cargo publish --dry-run "$@"
 echo "$0 finished"
